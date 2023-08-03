@@ -22,7 +22,7 @@ typedef struct {
     int bc_current_char;
     int ac_current_char;
     int current_chars_stored;
-    char flags; // 1's bit is if it has updated
+    u8 flags; // 1's bit is if it has updated
 } Text_buffer;
 
 /* Used to store the lines that were on the previous frame to be able to free them when the screen changes */

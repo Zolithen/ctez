@@ -3,16 +3,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-Data_buffer* databuffer_new(unsigned long insize) {
+Data_buffer* databuffer_new(u64 insize) {
     Data_buffer* buf = emalloc(sizeof(Data_buffer));
     buf->maxsize = insize;
-    buf->data = ecalloc(insize, sizeof(unsigned char));
+    buf->data = ecalloc(insize, sizeof(u8));
     buf->cursize = 0;
 
     return buf;
 }
 
-void databuffer_add_byte(Data_buffer* buf, unsigned char byt) {
+void databuffer_add_byte(Data_buffer* buf, u8 byt) {
     if (buf->cursize == buf->maxsize) {
         buf->maxsize *= 2;
         buf->data = erealloc(buf->data, buf->maxsize);
@@ -21,7 +21,7 @@ void databuffer_add_byte(Data_buffer* buf, unsigned char byt) {
     buf->cursize++;
 }
 
-void databuffer_add_bytes(Data_buffer* buf, unsigned char* bytes, size_t amount) {
+void databuffer_add_bytes(Data_buffer* buf, u8* bytes, size_t amount) {
     if (buf->cursize + amount >= buf->maxsize) {
         buf->maxsize += amount;
         buf->data = erealloc(buf->data, buf->maxsize);

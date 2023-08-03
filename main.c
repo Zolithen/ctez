@@ -9,8 +9,6 @@
 
 //#define TEST
 
-/* pdcurses apparently doesn't always free memory? */
-
 WINDOW* makeMenuBar() {
     int w = getmaxx(stdscr);
     WINDOW* ret = newwin(3, w, 0, 0);
@@ -27,7 +25,7 @@ WINDOW* makeMenuBar() {
 WINDOW* make_textwin() {
     int h, w;
     getmaxyx(stdscr, h, w);
-    WINDOW* textwin = newwin(h-1, w, 0, 0);
+    WINDOW* textwin = newwin(h-2, w, 0, 0);
     refresh();
     return textwin;
 }
@@ -58,7 +56,7 @@ int main(int argc, char** argv) {
             c = fgetc(f);
             if (feof(f)) break;
             //addch(c);
-            databuffer_add_byte(dat, (unsigned char) c);
+            databuffer_add_byte(dat, (u8) c);
         }
         databuffer_add_byte(dat, '\0');
 
@@ -82,7 +80,7 @@ int main(int argc, char** argv) {
             is_running = false;
         } else if ( keypress == KEY_RESIZE ) {
             resize_term(0, 0);
-            free(textwin);
+            delwin(textwin);
             textwin = make_textwin();
             refresh();
             main_buffer->flags |= 1;
@@ -128,8 +126,12 @@ int main(int argc, char** argv) {
                 }
           }
           else if (keypress == 13 || keypress == PADENTER)  tbuffer_insert(main_buffer, '\n');
-          else if (keypress == 9) tbuffer_insert(main_buffer, '\t');
-          else if (keypress == 8)   { // Backspace
+          else if (keypress == 9) {
+                tbuffer_insert(main_buffer, ' ');
+                tbuffer_insert(main_buffer, ' ');
+                tbuffer_insert(main_buffer, ' ');
+                tbuffer_insert(main_buffer, ' ');
+          } else if (keypress == 8)   { // Backspace
                 if (main_buffer->bc_current_char != 0) {
                     main_buffer->before_cursor[main_buffer->bc_current_char-1] = 0;
                     main_buffer->bc_current_char--;
@@ -140,11 +142,23 @@ int main(int argc, char** argv) {
           else if (keypress == PADSLASH) tbuffer_insert(main_buffer, '/');
           else if (keypress == PADPLUS) tbuffer_insert(main_buffer, '+');
           else if (keypress == PADMINUS) tbuffer_insert(main_buffer, '-');
+          else if (keypress == KEY_F(1)) {
+                FILE* f;
+                f = fopen("test.txt", "w+");
+                Data_buffer* dat = utftrans_16to8(main_buffer->before_cursor, main_buffer->bc_current_char);
+                for(u64 i = 0; i < dat->cursize; i++) {
+                    fputc(dat->data[i], f);
+                }
+                fclose(f);
+                databuffer_free(dat);
+          } else if (keypress == KEY_F(2)) {
+            tbuffer_insert(main_buffer, 0x2551);
+          }
 
         if ((main_buffer->flags & 1) == 1) {
             main_buffer->flags &= 254;
             mvprintw(winh-1, 0, "                                                                      ");
-            mvprintw(winh - 1, 0, "Buffer size:%d bytes|Chars:%d|Line:",
+            mvprintw(winh - 2, 0, "Buffer size:%d bytes|Chars:%d|Line:",
                      main_buffer->b_size*2*2,
                      main_buffer->bc_current_char + main_buffer->b_size - main_buffer->ac_current_char
             );

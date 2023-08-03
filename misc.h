@@ -12,7 +12,7 @@ int   maxi(int a, int b);
 
 wchar_t* wstrcat(const wchar_t* first, const wchar_t* second, int szfirst, int szsecond); /* Concatenates 2 wchar_t strings given their sizes */
 
-char*    utftrans_16to8(wchar_t* str);
-Data_buffer* utftrans_8to16(unsigned char* str, int maxsize);
+Data_buffer* utftrans_16to8(wchar_t* str, int maxsize);
+Data_buffer* utftrans_8to16(u8* str, int maxsize);
 
 #endif // MISC_H_INCLUDED
