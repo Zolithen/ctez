@@ -248,3 +248,20 @@ int tbuffer_first_nl_after(Text_buffer* buf, int pos) {
     }
     return buf->b_size;
 }
+
+void tbuffer_free(Text_buffer* buf) {
+    free(buf->after_cursor);
+    free(buf->before_cursor);
+    free(buf);
+}
+
+/*
+    BUFFER SYSTEM STUFF
+*/
+
+static struct {
+    Text_buffer* buffers;
+    u8* free;
+} Textbuffer_system;
+
+

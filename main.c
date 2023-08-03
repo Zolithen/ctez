@@ -7,27 +7,18 @@
 #include "buffer.h"
 #include "databuffer.h"
 
-//#define TEST
 
-WINDOW* makeMenuBar() {
-    int w = getmaxx(stdscr);
-    WINDOW* ret = newwin(3, w, 0, 0);
-    //mvwprintw(ret, 0, 0, " File ");
-    wattron(ret, COLOR_PAIR(1));
-    mvwprintw(ret, 0, 0, "        ");
-    mvwprintw(ret, 1, 0, "  File  ");
-    mvwprintw(ret, 2, 0, "        ");
-    wattroff(ret, COLOR_PAIR(1));
-
-    return ret;
-}
-
-WINDOW* make_textwin() {
-    int h, w;
-    getmaxyx(stdscr, h, w);
+// TODO: It's probably much better to make something like a system for handling windows
+WINDOW* make_textwin(int h, int w) {
     WINDOW* textwin = newwin(h-2, w, 0, 0);
     refresh();
     return textwin;
+}
+
+WINDOW* make_commandwin(int h, int w) {
+    WINDOW* commandwin = newwin(1, w, h-1, 0);
+    refresh();
+    return commandwin;
 }
 
 int start_display();
@@ -44,9 +35,10 @@ int main(int argc, char** argv) {
     Previous_lines_buffer* previous_lines = ecalloc(1, sizeof(Previous_lines_buffer));
 
     if (start_display() == -1) return -1;
-    WINDOW* textwin = make_textwin();
     int winh, winw;
     getmaxyx(stdscr, winh, winw);
+    WINDOW* textwin = make_textwin(winh, winw);
+    WINDOW* commandwin = make_commandwin(winh, winw);
 
     if (argc > 1) {
         FILE* f = fopen(argv[1], "r");
@@ -76,23 +68,19 @@ int main(int argc, char** argv) {
     while (is_running) {
         int keypress = getch();
 
+        // TODO: please change this to a more sensisble solution
         if (keypress == 27) {
             is_running = false;
         } else if ( keypress == KEY_RESIZE ) {
             resize_term(0, 0);
             delwin(textwin);
-            textwin = make_textwin();
+            delwin(commandwin);
+            getmaxyx(stdscr, winh, winw);
+            textwin = make_textwin(winh, winw);
+            commandwin = make_commandwin(winh, winw);
             refresh();
             main_buffer->flags |= 1;
-            getmaxyx(stdscr, winh, winw);
         }
-#ifdef TEST
-        if (keypress != ERR) {
-            printw("%d|", keypress);
-            refresh();
-        }
-#endif
-#ifndef TEST
         if (keypress == KEY_LEFT) tbuffer_move_cursor(main_buffer, -1);
           else if (keypress == KEY_RIGHT) tbuffer_move_cursor(main_buffer, 1);
           else if (keypress == KEY_UP) { // Scroll up
@@ -143,6 +131,8 @@ int main(int argc, char** argv) {
           else if (keypress == PADPLUS) tbuffer_insert(main_buffer, '+');
           else if (keypress == PADMINUS) tbuffer_insert(main_buffer, '-');
           else if (keypress == KEY_F(1)) {
+                // TODO: We should make sure we don't corrupt anything on the original file if in the saving process the computer is shutdown
+                //       (And actually implement a good saving system)
                 FILE* f;
                 f = fopen("test.txt", "w+");
                 Data_buffer* dat = utftrans_16to8(main_buffer->before_cursor, main_buffer->bc_current_char);
@@ -167,7 +157,6 @@ int main(int argc, char** argv) {
                This is because addwstr apparently needs the pointer alive and doesn't copy the contents of the string? Idk */
             tbuffer_render(textwin, main_buffer, previous_lines);
         }
-#endif
     }
 
     endwin();

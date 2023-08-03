@@ -2,6 +2,7 @@
 #define BUFFER_H_INCLUDED
 
 #include <curses.h>
+#include <stdlib.h>
 #include "databuffer.h"
 
 /* Text_buffer stores text in 2 different buffers: one that consists of text before the cursor
@@ -36,22 +37,38 @@ typedef enum {
     BO_AFTER
 } Buffer_order;
 
+
+
+
 /* Initializers */
 Text_buffer* tbuffer_create(int in_size);
 Text_buffer* tbuffer_from_databuffer(Data_buffer* dat); /* Creates a Text_buffer with before_cursor from dat->data */
 
+/* Modifies the buffer */
 void tbuffer_insert(Text_buffer* buf, wchar_t c); /* Types a character where the cursor is */
-void tbuffer_resize(Text_buffer* buf); /* Doubles the storage available in the buffer */
-void tbuffer_render(WINDOW* win, Text_buffer* buf, Previous_lines_buffer* previous_lines); /* Renders the lines that are visible on the given window */
-
 int tbuffer_move_cursor(Text_buffer* buf, int amount); /* Moves the cursor amount characters backwards(negative amount) or forwards (positive amount)*/
+
+/* Necessary data management */
+void tbuffer_resize(Text_buffer* buf); /* Doubles the storage available in the buffer */
+void tbuffer_free(Text_buffer* buf);
+
+/* Search functions */
 int tbuffer_last_nl_before(Text_buffer* buf, int pos); /* Finds the last newline before the given position */
 int tbuffer_first_nl_after(Text_buffer* buf, int pos); /* Finds the first newline after the given position */
-
 wchar_t* tbuffer_translate_string(Text_buffer* buf, Buffer_order b, int st, int en); /* Translates a section of the given buffer into a wide string */
 
-#ifdef DEBUG
-void tbuffer_read(Text_buffer* buf);
-#endif
+void tbuffer_render(WINDOW* win, Text_buffer* buf, Previous_lines_buffer* previous_lines); /* Renders the lines that are visible on the given window */
+
+/*
+    Buffer system functions (struct defined in c file to make it private)
+    Allows us to handle multiple files being opened at once, handles all memory stuff of that
+    so we don't have 100 mallocs in different places
+*/
+#define MAX_OPENED_FILES 256
+typedef u8 TBUFID; // Allows for easier refactoring if we want to make it u16 later
+
+TBUFID FILE_new();
+TBUFID FILE_open(const char* name);
+bool FILE_save(TBUFID buf);
 
 #endif // BUFFER_H_INCLUDED
