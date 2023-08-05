@@ -12,7 +12,7 @@ Text_buffer* tbuffer_create(int in_size) {
     res->ac_current_char = in_size;
     res->bc_current_char = 0;
     res->current_chars_stored = 0;
-    res->flags = 0;
+    res->flags = TB_WRITTABLE;
     return res;
 }
 
@@ -25,21 +25,25 @@ Text_buffer* tbuffer_from_databuffer(Data_buffer* dat) { // TODO: check if not c
     res->ac_current_char = res->b_size;
     res->bc_current_char = res->b_size - 1;
     res->current_chars_stored = res->b_size - 1;
-    res->flags = 1;
+    res->flags = TB_WRITTABLE | TB_UPDATED;
 
     memcpy(res->before_cursor, dat->data, sizeof(wchar_t)*(res->b_size - 1));
     return res;
 }
 
-void tbuffer_insert(Text_buffer* buf, wchar_t c) {
-    if (buf->current_chars_stored >= buf->b_size) {
-        tbuffer_resize(buf);
-    }
-    buf->before_cursor[buf->bc_current_char] = c;
-    buf->current_chars_stored++;
-    buf->bc_current_char++;
+bool tbuffer_insert(Text_buffer* buf, wchar_t c) {
+    if (IS_FLAG_ON(buf->flags, TB_WRITTABLE)) {
+        if (buf->current_chars_stored >= buf->b_size) {
+            tbuffer_resize(buf);
+        }
+        buf->before_cursor[buf->bc_current_char] = c;
+        buf->current_chars_stored++;
+        buf->bc_current_char++;
 
-    buf->flags |= 1;
+        buf->flags |= TB_UPDATED;
+        return true;
+    }
+    return false;
 }
 
 void tbuffer_resize(Text_buffer* buf) {
@@ -71,7 +75,7 @@ int tbuffer_move_cursor(Text_buffer* buf, int amount) {
         memcpy(buf->after_cursor + buf->ac_current_char, buf->before_cursor + buf->bc_current_char, sizeof(wchar_t)*actual);
         memset(buf->before_cursor + buf->bc_current_char, 0, sizeof(wchar_t)*actual);
 
-        buf->flags |= 1;
+        buf->flags |= TB_UPDATED;
         return actual;
     } else if (amount > 0) {
         int actual = amount;
@@ -82,7 +86,7 @@ int tbuffer_move_cursor(Text_buffer* buf, int amount) {
         buf->bc_current_char += actual;
         buf->ac_current_char += actual; // plus bcs it's flipped.
 
-        buf->flags |= 1;
+        buf->flags |= TB_UPDATED;
         return actual;
     }
     return 0;
@@ -90,7 +94,7 @@ int tbuffer_move_cursor(Text_buffer* buf, int amount) {
 
 /* We start iterating over chars that are near the cursor, so we find line breaks and
    get the amount of chars between them so we can render lines correctly */
-void tbuffer_render(WINDOW* win, Text_buffer* buf, Previous_lines_buffer* previous_lines) {
+void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx) {
 
     int winh = getmaxy(win);
     int center = winh % 2 == 0 ? winh/2 : (winh-1)/2;
@@ -172,22 +176,25 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Previous_lines_buffer* previo
     int centerx, centery; // We save centery just in case
     werase(win);
     for (int i = 0; i < winh; i++) {
-        if (lines_hasinit[i]) {
+        /*if (lines_hasinit[i]) {
             wmove(win, i, 0);
             wprintw(win, "%d", i+1);
-        }
+        }*/
         if (i == center) {
-            wmove(win, i, 8); // We have to put this so far from the start because curses starts tabbing at the start of the console window
+            wmove(win, i, 0); // We have to put this so far from the start because curses starts tabbing at the start of the console window
             waddwstr(win, current_line_before);
+            //getyx(stdscr, centerx, centery);
             centerx = getcurx(win);
             centery = getcury(win);
         }
-        wmove(win, i, 8);
+        wmove(win, i, 0);
         waddwstr(win, lines[i]);
     }
     wrefresh(win);
 
-    move(centery, centerx);
+    *cx = centerx;
+    *cy = centery;
+    //wmove(win, centery, centerx);
     wrefresh(stdscr);
 
     free(lines_hasinit);
@@ -261,7 +268,103 @@ void tbuffer_free(Text_buffer* buf) {
 
 static struct {
     Text_buffer* buffers;
-    u8* free;
-} Textbuffer_system;
+    int first_free;
+} TB_system;
+
+void ts_start() {
+    TB_system.buffers = ecalloc(3, sizeof(Text_buffer)); // Starting allocation
+    TB_system.first_free = 0;
+}
+
+TBUFID FILE_new();
+TBUFID FILE_open(const char* name);
+bool FILE_save(TBUFID buf);
 
 
+/*
+    BUFFER WINDOW STUFF
+*/
+
+Buffer_window* bwindow_create() {
+    Buffer_window* b = ecalloc(1, sizeof(Buffer_window));
+    //b->curses_window = newwin(0, 0, 0, 0);
+    b->current_buffer = tbuffer_create(3);
+    b->prevl = ecalloc(1, sizeof(Lines_buffer));
+    b->flags = 0;
+    return b;
+}
+
+
+void bwindow_handle_keypress(Buffer_window* w, int key) {
+
+    Text_buffer* buf = w->current_buffer;
+    switch (key) {
+    case 13:
+    case PADENTER:
+        tbuffer_insert(buf, '\n');
+        break;
+
+    case 9:
+        tbuffer_insert(buf, '\t');
+        break;
+
+    case 8: // Backspace
+        if (buf->bc_current_char != 0) {
+            buf->before_cursor[buf->bc_current_char-1] = 0;
+            buf->bc_current_char--;
+            buf->flags |= TB_UPDATED;
+        }
+        break;
+
+    case PADSTAR: tbuffer_insert(buf, '*'); break;
+    case PADSLASH: tbuffer_insert(buf, '/'); break;
+    case PADPLUS: tbuffer_insert(buf, '+'); break;
+    case PADMINUS: tbuffer_insert(buf, '-'); break;
+
+    case KEY_LEFT:
+        tbuffer_move_cursor(buf, -1);
+        break;
+
+    case KEY_RIGHT:
+        tbuffer_move_cursor(buf, 1);
+        break;
+
+    case KEY_UP: ;
+        int linestart = tbuffer_last_nl_before(buf, buf->bc_current_char);
+        if (linestart != 0) {
+            int newlinestart = tbuffer_last_nl_before(buf, linestart - 1);
+            linestart = newlinestart == 0 ? linestart + 1 : linestart;
+            if (linestart - newlinestart < buf->bc_current_char - linestart) {
+                tbuffer_move_cursor(buf, linestart - buf->bc_current_char);
+            } else {
+                tbuffer_move_cursor(buf, newlinestart - linestart);
+            }
+        }
+        break;
+
+    case KEY_DOWN: ;
+        // This is code
+        int lineend = tbuffer_first_nl_after(buf, buf->ac_current_char) - buf->ac_current_char + buf->bc_current_char;
+        // (- buf->ac_current_char + buf->bc_current_char) translates it from after_cursor coord space to before_cursor coord space
+        if (lineend == buf->b_size - 1) {
+            tbuffer_move_cursor(buf, buf->b_size - buf->bc_current_char);
+        } else {
+            int linestart = tbuffer_last_nl_before(buf, buf->bc_current_char);
+            int newlineend = tbuffer_first_nl_after(buf, lineend - buf->bc_current_char + buf->ac_current_char + 1)
+                             - buf->ac_current_char + buf->bc_current_char;
+            linestart = linestart == 0 ? -1 : linestart;
+            newlineend = newlineend == buf->b_size - 1 ? newlineend - 1 : newlineend;
+            if (buf->bc_current_char - linestart > newlineend - lineend) { // Current line is bigger than following line
+                tbuffer_move_cursor(buf, newlineend - buf->bc_current_char);
+            } else {
+                tbuffer_move_cursor(buf, - linestart + lineend);
+            }
+        }
+        break;
+
+    }
+
+    if ((key >= 32 && key <= 0x7E) || (key >= 0xA1 && key <= 0xFF)) {
+        tbuffer_insert(buf, key);
+    }
+}

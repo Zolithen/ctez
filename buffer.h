@@ -23,32 +23,34 @@ typedef struct {
     int bc_current_char;
     int ac_current_char;
     int current_chars_stored;
-    u8 flags; // 1's bit is if it has updated
+    u8 flags; // 1's bit has updated, 2's bit writtable
 } Text_buffer;
 
 /* Used to store the lines that were on the previous frame to be able to free them when the screen changes */
 typedef struct {
     wchar_t** lines;
     int amount;
-} Previous_lines_buffer;
+} Lines_buffer;
 
 typedef enum {
     BO_BEFORE,
     BO_AFTER
 } Buffer_order;
 
-
-
+typedef enum {
+    TB_UPDATED = 1,
+    TB_WRITTABLE = 2
+} Text_buffer_flags;
 
 /* Initializers */
 Text_buffer* tbuffer_create(int in_size);
 Text_buffer* tbuffer_from_databuffer(Data_buffer* dat); /* Creates a Text_buffer with before_cursor from dat->data */
 
 /* Modifies the buffer */
-void tbuffer_insert(Text_buffer* buf, wchar_t c); /* Types a character where the cursor is */
+bool tbuffer_insert(Text_buffer* buf, wchar_t c); /* Types a character where the cursor is */
 int tbuffer_move_cursor(Text_buffer* buf, int amount); /* Moves the cursor amount characters backwards(negative amount) or forwards (positive amount)*/
 
-/* Necessary data management */
+/* Necessary memory management */
 void tbuffer_resize(Text_buffer* buf); /* Doubles the storage available in the buffer */
 void tbuffer_free(Text_buffer* buf);
 
@@ -57,18 +59,45 @@ int tbuffer_last_nl_before(Text_buffer* buf, int pos); /* Finds the last newline
 int tbuffer_first_nl_after(Text_buffer* buf, int pos); /* Finds the first newline after the given position */
 wchar_t* tbuffer_translate_string(Text_buffer* buf, Buffer_order b, int st, int en); /* Translates a section of the given buffer into a wide string */
 
-void tbuffer_render(WINDOW* win, Text_buffer* buf, Previous_lines_buffer* previous_lines); /* Renders the lines that are visible on the given window */
+void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx); /* Renders the lines that are visible on the given window */
+
+
+
 
 /*
     Buffer system functions (struct defined in c file to make it private)
     Allows us to handle multiple files being opened at once, handles all memory stuff of that
     so we don't have 100 mallocs in different places
 */
-#define MAX_OPENED_FILES 256
-typedef u8 TBUFID; // Allows for easier refactoring if we want to make it u16 later
+typedef u32 TBUFID;
 
-TBUFID FILE_new();
-TBUFID FILE_open(const char* name);
-bool FILE_save(TBUFID buf);
+void ts_start();
+void ts_search_free();
+TBUFID tsFILE_new();
+TBUFID tsFILE_open(const char* name);
+bool tsFILE_save(TBUFID buf);
+
+
+
+
+/*
+    Buffer window functions
+*/
+
+typedef struct {
+    Text_buffer* current_buffer;
+    Lines_buffer* curl;
+    Lines_buffer* prevl;
+    WINDOW* curses_window;
+    u8 flags; // 1's bit visible
+} Buffer_window;
+
+typedef enum {
+    BW_VISIBLE = 1
+} Buffer_window_flags;
+
+Buffer_window* bwindow_create();
+void bwindow_assign_tbuffer(Buffer_window* w, Text_buffer* b);
+void bwindow_handle_keypress(Buffer_window* w, int keypress);
 
 #endif // BUFFER_H_INCLUDED
