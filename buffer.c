@@ -3,6 +3,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 Text_buffer* tbuffer_create(int in_size) {
     Text_buffer* res = emalloc(sizeof(Text_buffer));
@@ -97,12 +98,19 @@ int tbuffer_move_cursor(Text_buffer* buf, int amount) {
 void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx) {
 
     int winh = getmaxy(win);
+    int winw = getmaxx(win);
     int center = winh % 2 == 0 ? winh/2 : (winh-1)/2;
     int line_offset = 0;
     wchar_t** lines = ecalloc(winh, sizeof(wchar_t*));
     bool*     lines_hasinit = ecalloc(winh, sizeof(bool));
+    int*      lines_size = ecalloc(winh, sizeof(int)); // Wrap size
     int c_linebef_size = 0;
     int start_offset = 0;
+    bool endscroll = IS_FLAG_ON(buf->flags, TB_ENDSCROLL);
+
+    if (endscroll) {
+        center = winh - 1;
+    }
 
     // before_cursor and first part of the current line
     for (int i = 0; i <= buf->bc_current_char; i++) {
@@ -110,6 +118,8 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
             wchar_t* str = tbuffer_translate_string(buf, BO_BEFORE, buf->bc_current_char - i + 1, buf->bc_current_char - start_offset);
             lines[center+line_offset] = str;
             lines_hasinit[center+line_offset] = true;
+            //buf->bc_current_char - start_offset - (buf->bc_current_char - i + 1)
+            lines_size[center+line_offset] = (int)floor((i - 1 - start_offset)/winw);
 
             if (line_offset == 0) {
                 int a = i - 1 + start_offset;
@@ -123,6 +133,7 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
             wchar_t* str = tbuffer_translate_string(buf, BO_BEFORE, buf->bc_current_char - i, buf->bc_current_char - start_offset);
             lines[center+line_offset] = str;
             lines_hasinit[center+line_offset] = true;
+            lines_size[center+line_offset] = (int)floor((i - 1 - start_offset)/winw);
 
             if (line_offset == 0) c_linebef_size = i - start_offset;
 
@@ -143,11 +154,13 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
                 wchar_t* str = tbuffer_translate_string(buf, BO_AFTER, buf->ac_current_char + start_offset, buf->ac_current_char + i);
                 lines[center+line_offset] = str;
                 lines_hasinit[center+line_offset] = true;
+                lines_size[center+line_offset] = (int)floor((i - start_offset)/winw);
             } else {
                 current_line_after = ecalloc(i - start_offset, sizeof(wchar_t));
                 memcpy(current_line_after, buf->after_cursor + buf->ac_current_char + start_offset, (i - start_offset)*sizeof(wchar_t));
                 c_lineaf_size = i - start_offset;
             }
+            if (endscroll) break;
 
             start_offset = i+1;
             line_offset++;
@@ -156,11 +169,13 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
                 wchar_t* str = tbuffer_translate_string(buf, BO_AFTER, buf->ac_current_char + start_offset, buf->ac_current_char + i + 1);
                 lines[center+line_offset] = str;
                 lines_hasinit[center+line_offset] = true;
+                lines_size[center+line_offset] = (int)floor((i + 1 - start_offset)/winw);
             } else {
                 current_line_after = ecalloc(i - start_offset, sizeof(wchar_t));
                 memcpy(current_line_after, buf->after_cursor + buf->ac_current_char + start_offset, (i - start_offset)*sizeof(wchar_t)); //ok
                 c_lineaf_size = i - start_offset;
             }
+            if (endscroll) break;
 
             start_offset = i+1;
             line_offset++;
@@ -171,33 +186,35 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
     // Correctly get the current line. We have the first part in lines[center] and the second one in current_line_after.
     wchar_t* current_line_before = lines[center];
     lines[center] = wstrcat(current_line_before, current_line_after, c_linebef_size, c_lineaf_size);
+    lines_size[center] = (int)floor((c_linebef_size + c_lineaf_size)/winw);
 
     // Render everything
     int centerx, centery; // We save centery just in case
     werase(win);
+    int wrap_line_offset = 0; //
     for (int i = 0; i < winh; i++) {
         /*if (lines_hasinit[i]) {
             wmove(win, i, 0);
             wprintw(win, "%d", i+1);
         }*/
         if (i == center) {
-            wmove(win, i, 0); // We have to put this so far from the start because curses starts tabbing at the start of the console window
+            wmove(win, i+wrap_line_offset, 0);
             waddwstr(win, current_line_before);
-            //getyx(stdscr, centerx, centery);
             centerx = getcurx(win);
             centery = getcury(win);
         }
-        wmove(win, i, 0);
+        wmove(win, i+wrap_line_offset, 0);
         waddwstr(win, lines[i]);
+        wrap_line_offset += lines_size[i];
     }
     wrefresh(win);
 
     *cx = centerx;
     *cy = centery;
-    //wmove(win, centery, centerx);
     wrefresh(stdscr);
 
     free(lines_hasinit);
+    free(lines_size);
     free(current_line_after);
     free(current_line_before);
 
@@ -298,14 +315,15 @@ Buffer_window* bwindow_create() {
 void bwindow_handle_keypress(Buffer_window* w, int key) {
 
     Text_buffer* buf = w->current_buffer;
+    bool is_comline = IS_FLAG_ON(buf->flags, TB_COMLINE);
     switch (key) {
     case 13:
     case PADENTER:
-        tbuffer_insert(buf, '\n');
+        if (!is_comline) tbuffer_insert(buf, '\n');
         break;
 
     case 9:
-        tbuffer_insert(buf, '\t');
+        if (!is_comline) tbuffer_insert(buf, '\t');
         break;
 
     case 8: // Backspace
@@ -329,7 +347,8 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
         tbuffer_move_cursor(buf, 1);
         break;
 
-    case KEY_UP: ;
+    case KEY_UP:
+        if (is_comline) return;
         int linestart = tbuffer_last_nl_before(buf, buf->bc_current_char);
         if (linestart != 0) {
             int newlinestart = tbuffer_last_nl_before(buf, linestart - 1);
@@ -342,7 +361,8 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
         }
         break;
 
-    case KEY_DOWN: ;
+    case KEY_DOWN:
+        if (is_comline) return;
         // This is code
         int lineend = tbuffer_first_nl_after(buf, buf->ac_current_char) - buf->ac_current_char + buf->bc_current_char;
         // (- buf->ac_current_char + buf->bc_current_char) translates it from after_cursor coord space to before_cursor coord space

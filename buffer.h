@@ -23,7 +23,7 @@ typedef struct {
     int bc_current_char;
     int ac_current_char;
     int current_chars_stored;
-    u8 flags; // 1's bit has updated, 2's bit writtable
+    u8 flags;
 } Text_buffer;
 
 /* Used to store the lines that were on the previous frame to be able to free them when the screen changes */
@@ -39,7 +39,9 @@ typedef enum {
 
 typedef enum {
     TB_UPDATED = 1,
-    TB_WRITTABLE = 2
+    TB_WRITTABLE = 2,
+    TB_ENDSCROLL = 4, // Should the cursor be in the end of the buffer window or in the middle
+    TB_COMLINE = 8
 } Text_buffer_flags;
 
 /* Initializers */

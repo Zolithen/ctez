@@ -7,6 +7,7 @@
 #include "misc.h"
 #include "buffer.h"
 #include "databuffer.h"
+#include "types.h"
 
 #include <windows.h> // Used for platform_sleep
 #define BOTTOM_SECTION_HEIGHT 12
@@ -50,37 +51,53 @@ int start_display() {
     return 0;
 }
 
+void show_bottom_of_screen(Buffer_window** wins, int winh, int winw) {
+    wins[TWINCOM]->flags |= BW_VISIBLE;
+    delwin(wins[TWINCOM]->curses_window);
+
+    if (winw % 2 == 0) {
+        wins[TWINCOM]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 1, winw/2 - 1, winh - BOTTOM_SECTION_HEIGHT + 1, 0);
+    } else {
+        wins[TWINCOM]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 1, (int)floor(winw/2), winh - BOTTOM_SECTION_HEIGHT + 1, 0);
+    }
+
+    wins[TWINCOM]->current_buffer->flags |= TB_UPDATED | TB_ENDSCROLL | TB_COMLINE;
+}
+
 void show_monolithic_layout(Buffer_window** wins, int winh, int winw) {
-    for (int i = 3; i < 6; i++) {
+    for (int i = TWIN2; i < MAX_WINDOWS; i++) {
         SET_FLAG_OFF(wins[i]->flags, BW_VISIBLE);
     }
-    wins[2]->flags |= BW_VISIBLE;
-    delwin(wins[2]->curses_window);
+    wins[TWIN1]->flags |= BW_VISIBLE;
+    delwin(wins[TWIN1]->curses_window);
 
-    wins[2]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, winw, 0, 0);
-    wins[2]->current_buffer->flags |= TB_UPDATED;
+    wins[TWIN1]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, winw, 0, 0);
+    wins[TWIN1]->current_buffer->flags |= TB_UPDATED;
+
+    show_bottom_of_screen(wins, winh, winw);
 }
 
 void show_double_layout(Buffer_window** wins, int winh, int winw) {
-    for (int i = 4; i < 6; i++) {
+    for (int i = TWIN3; i < MAX_WINDOWS; i++) {
         SET_FLAG_OFF(wins[i]->flags, BW_VISIBLE);
     }
-    wins[2]->flags |= BW_VISIBLE;
-    delwin(wins[2]->curses_window);
-    wins[3]->flags |= BW_VISIBLE;
-    delwin(wins[3]->curses_window);
+    wins[TWIN1]->flags |= BW_VISIBLE;
+    delwin(wins[TWIN1]->curses_window);
+    wins[TWIN2]->flags |= BW_VISIBLE;
+    delwin(wins[TWIN2]->curses_window);
 
     if (winw % 2 == 0) {
-        wins[2]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, winw/2 - 1, 0, 0);
-        wins[2]->current_buffer->flags |= TB_UPDATED;
-        wins[3]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, winw/2 - 1, 0, winw/2 + 1);
-        wins[3]->current_buffer->flags |= TB_UPDATED;
+        wins[TWIN1]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, winw/2 - 1, 0, 0);
+        wins[TWIN2]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, winw/2 - 1, 0, winw/2 + 1);
     } else {
-        wins[2]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, (int)floor(winw/2), 0, 0);
-        wins[2]->current_buffer->flags |= TB_UPDATED;
-        wins[3]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, (int)floor(winw/2), 0, floor(winw/2) + 1);
-        wins[3]->current_buffer->flags |= TB_UPDATED;
+        wins[TWIN1]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, (int)floor(winw/2), 0, 0);
+        wins[TWIN2]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, (int)floor(winw/2), 0, floor(winw/2) + 1);
     }
+
+    wins[TWIN1]->current_buffer->flags |= TB_UPDATED;
+    wins[TWIN2]->current_buffer->flags |= TB_UPDATED;
+
+    show_bottom_of_screen(wins, winh, winw);
 }
 
 int main(int argc, char** argv) {
@@ -93,22 +110,22 @@ int main(int argc, char** argv) {
     int selwinx, selwiny;
 
     // Structs
-    Buffer_window** bwindows = ecalloc(6, sizeof(Buffer_window*));
+    Buffer_window** bwindows = ecalloc(MAX_WINDOWS, sizeof(Buffer_window*));
 
     // Setup layouts
     int editor_layout = 0; // 0 is monolithic, 1 is double & 2 is four
 
-    for (int i = 2; i < 6; i++) {
+    for (int i = TWIN1; i < MAX_WINDOWS; i++) {
         bwindows[i] = bwindow_create();
         bwindows[i]->curses_window = newwin(1, 1, 0, 0);
     }
 
-    bwindows[0] = bwindow_create();
-    bwindows[1] = bwindow_create();
+    bwindows[TWINCOM] = bwindow_create();
+    bwindows[TWINFILE] = bwindow_create();
 
     show_double_layout(bwindows, winh, winw);
 
-    int selected_window = 3;
+    int selected_window = TWIN2;
     getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
 
     /*if (argc > 1) {
@@ -152,8 +169,8 @@ int main(int argc, char** argv) {
 
             refresh();
         } else if (keypress == KEY_F(1)) {
-            if (selected_window == 2) selected_window = 3;
-            else selected_window = 2;
+            if (selected_window == TWINCOM) selected_window = TWIN1;
+            else selected_window = TWINCOM;
             getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
             bwindows[selected_window]->current_buffer->flags |= TB_UPDATED;
         }
@@ -165,7 +182,7 @@ int main(int argc, char** argv) {
         );*/
 
         bwindow_handle_keypress(curwin, keypress);
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < MAX_WINDOWS; i++) {
             curwin = bwindows[i];
             curbuffer = curwin->current_buffer;
             if (IS_FLAG_ON(curbuffer->flags, TB_UPDATED)) {
