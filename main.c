@@ -8,22 +8,12 @@
 #include "buffer.h"
 #include "databuffer.h"
 #include "types.h"
+#include "strlist.h"
+#include "command.h"
 
 #include <windows.h> // Used for platform_sleep
 #define BOTTOM_SECTION_HEIGHT 12
 
-// TODO: It's probably much better to make something like a system for handling windows
-WINDOW* make_textwin(int h, int w) {
-    WINDOW* textwin = newwin(h-2, w, 0, 0);
-    refresh();
-    return textwin;
-}
-
-WINDOW* make_commandwin(int h, int w) {
-    WINDOW* commandwin = newwin(1, w, h-1, 0);
-    refresh();
-    return commandwin;
-}
 
 void platform_sleep(int milisecs) { // You can change this one function to the platform's sleep function (it's not in the C standard)
     Sleep(milisecs); // Windows
@@ -65,6 +55,7 @@ void show_bottom_of_screen(Buffer_window** wins, int winh, int winw) {
 }
 
 void show_monolithic_layout(Buffer_window** wins, int winh, int winw) {
+    erase();
     for (int i = TWIN2; i < MAX_WINDOWS; i++) {
         SET_FLAG_OFF(wins[i]->flags, BW_VISIBLE);
     }
@@ -78,6 +69,7 @@ void show_monolithic_layout(Buffer_window** wins, int winh, int winw) {
 }
 
 void show_double_layout(Buffer_window** wins, int winh, int winw) {
+    erase();
     for (int i = TWIN3; i < MAX_WINDOWS; i++) {
         SET_FLAG_OFF(wins[i]->flags, BW_VISIBLE);
     }
@@ -98,6 +90,16 @@ void show_double_layout(Buffer_window** wins, int winh, int winw) {
     wins[TWIN2]->current_buffer->flags |= TB_UPDATED;
 
     show_bottom_of_screen(wins, winh, winw);
+
+    for (int i = 0; i < winh; i++) {
+        if (winw % 2 == 0) {
+            mvaddch(i, winw/2 - 1, 0x2503);
+            mvaddch(i, winw/2, 0x2503);
+        } else {
+            mvaddch(i, (int)floor(winw/2), 0x2503);
+        }
+    }
+    refresh();
 }
 
 int main(int argc, char** argv) {
@@ -127,6 +129,42 @@ int main(int argc, char** argv) {
 
     int selected_window = TWIN2;
     getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
+
+    command_parse(L"open \"D:/test proj/f.lua\" -r", 29); // with terminator
+    command_parse(L"copy \"D:/test\" \"yhn\"", 21);
+
+    /*wchar_t* t = ecalloc(3, sizeof(wchar_t));
+    t[0] = 'h';
+    t[1] = 'o';
+    t[2] = 'l';
+    Wide_string_list* test = wstrlist_new(4);
+    wstrlist_add_and_terminator(test, t, 3);
+    free(t);
+    t = ecalloc(9, sizeof(wchar_t));
+    t[0] = 't';
+    t[1] = 'e';
+    t[2] = 's';
+    t[3] = 't';
+    t[4] = ' ';
+    t[5] = 's';
+    t[6] = 't';
+    t[7] = 'r';
+    wstrlist_add(test, t, 9);
+    free(t);
+    t = ecalloc(4, sizeof(wchar_t));
+    t[0] = 't';
+    t[1] = 'o';
+    t[2] = 'n';
+    t[3] = 't';
+    wstrlist_add_and_terminator(test, t, 4);
+    Wide_string w1 = wstrlist_get(test, 0);
+    Wide_string w2 = wstrlist_get(test, 1);
+    Wide_string w3 = wstrlist_get(test, 2);
+    free(t);
+    wstrlist_debug_print(test);
+    wstrlist_free(test);*/
+
+
 
     /*if (argc > 1) {
         FILE* f = fopen(argv[1], "r");
@@ -169,8 +207,8 @@ int main(int argc, char** argv) {
 
             refresh();
         } else if (keypress == KEY_F(1)) {
-            if (selected_window == TWINCOM) selected_window = TWIN1;
-            else selected_window = TWINCOM;
+            if (selected_window == TWIN2) selected_window = TWIN1;
+            else selected_window = TWIN2;
             getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
             bwindows[selected_window]->current_buffer->flags |= TB_UPDATED;
         }

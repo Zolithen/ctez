@@ -31,6 +31,10 @@ void databuffer_add_bytes(Data_buffer* buf, u8* bytes, size_t amount) {
     buf->cursize += amount;
 }
 
+void databuffer_reset(Data_buffer* buf) {
+    memset(buf->data, 0, buf->cursize);
+}
+
 void databuffer_free(Data_buffer* buf) {
     free(buf->data);
     free(buf);

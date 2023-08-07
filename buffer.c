@@ -218,7 +218,6 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
     free(current_line_after);
     free(current_line_before);
 
-    // We free the lines that were on before. We do it now instead of before so the program doesn't crash
     if (previous_lines->lines != NULL) {
         for (int i = 0; i < previous_lines->amount; i++) {
             if (previous_lines->lines[i] != NULL) free(previous_lines->lines[i]);
