@@ -35,12 +35,25 @@ int maxi(int a, int b) {
     return a > b ? a : b;
 }
 
+// TODO: ensure this works correctly
 wchar_t* wstrcat(const wchar_t* first, const wchar_t* second, int szfirst, int szsecond) {
     wchar_t* res = ecalloc(szfirst + szsecond + 1, sizeof(wchar_t));
     memcpy(res, first, szfirst*sizeof(wchar_t));
     memcpy(res+szfirst, second, szsecond*sizeof(wchar_t));
     res[szfirst + szsecond] = 0;
     return res;
+}
+
+bool wstrcmp(const wchar_t* first, const wchar_t* second, int szfirst, int szsecond) {
+    if (szfirst == szsecond) {
+        for (int i = 0; i < szfirst; i++) {
+            if (first[i] != second[i]) return false;
+        }
+
+        return true;
+    }
+
+    return false;
 }
 
 /* Description of the algorithm:

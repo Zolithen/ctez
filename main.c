@@ -51,7 +51,7 @@ void show_bottom_of_screen(Buffer_window** wins, int winh, int winw) {
         wins[TWINCOM]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 1, (int)floor(winw/2), winh - BOTTOM_SECTION_HEIGHT + 1, 0);
     }
 
-    wins[TWINCOM]->current_buffer->flags |= TB_UPDATED | TB_ENDSCROLL | TB_COMLINE;
+    bwindow_buf_set_flags_on(wins[TWINCOM], TB_UPDATED | TB_ENDSCROLL | TB_COMLINE);
 }
 
 void show_monolithic_layout(Buffer_window** wins, int winh, int winw) {
@@ -63,7 +63,7 @@ void show_monolithic_layout(Buffer_window** wins, int winh, int winw) {
     delwin(wins[TWIN1]->curses_window);
 
     wins[TWIN1]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, winw, 0, 0);
-    wins[TWIN1]->current_buffer->flags |= TB_UPDATED;
+    bwindow_buf_set_flags_on(wins[TWIN1], TB_UPDATED);
 
     show_bottom_of_screen(wins, winh, winw);
 }
@@ -86,8 +86,8 @@ void show_double_layout(Buffer_window** wins, int winh, int winw) {
         wins[TWIN2]->curses_window = newwin(winh-BOTTOM_SECTION_HEIGHT, (int)floor(winw/2), 0, floor(winw/2) + 1);
     }
 
-    wins[TWIN1]->current_buffer->flags |= TB_UPDATED;
-    wins[TWIN2]->current_buffer->flags |= TB_UPDATED;
+    bwindow_buf_set_flags_on(wins[TWIN1], TB_UPDATED);
+    bwindow_buf_set_flags_on(wins[TWIN2], TB_UPDATED);
 
     show_bottom_of_screen(wins, winh, winw);
 
@@ -111,6 +111,8 @@ int main(int argc, char** argv) {
     int cursorx, cursory;
     int selwinx, selwiny;
 
+    ts_start();
+
     // Structs
     Buffer_window** bwindows = ecalloc(MAX_WINDOWS, sizeof(Buffer_window*));
 
@@ -130,8 +132,9 @@ int main(int argc, char** argv) {
     int selected_window = TWIN2;
     getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
 
-    command_parse(L"open \"D:/test proj/f.lua\" -r", 29); // with terminator
-    command_parse(L"copy \"D:/test\" \"yhn\"", 21);
+    /*Wide_string_list* test = command_parse(L"open \"D:/c/proj/ctez\"", 22); // with terminator
+    wstrlist_debug_print(test);
+    wstrlist_free(test);*/
 
     /*wchar_t* t = ecalloc(3, sizeof(wchar_t));
     t[0] = 'h';
@@ -193,7 +196,7 @@ int main(int argc, char** argv) {
         platform_sleep(1);
 
         Buffer_window* curwin = bwindows[selected_window];
-        Text_buffer* curbuffer = curwin->current_buffer;
+        //Text_buffer* curbuffer = curwin->current_buffer;
         int keypress = getch();
 
         if (keypress == 27) {
@@ -210,7 +213,7 @@ int main(int argc, char** argv) {
             if (selected_window == TWIN2) selected_window = TWIN1;
             else selected_window = TWIN2;
             getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
-            bwindows[selected_window]->current_buffer->flags |= TB_UPDATED;
+            bwindow_buf_set_flags_on(bwindows[selected_window], TB_UPDATED);
         }
 
         //mvprintw(winh-1, 0, "");
@@ -221,14 +224,7 @@ int main(int argc, char** argv) {
 
         bwindow_handle_keypress(curwin, keypress);
         for (int i = 0; i < MAX_WINDOWS; i++) {
-            curwin = bwindows[i];
-            curbuffer = curwin->current_buffer;
-            if (IS_FLAG_ON(curbuffer->flags, TB_UPDATED)) {
-                SET_FLAG_OFF(curbuffer->flags, TB_UPDATED);
-                /* We return the current array of lines from the function to free them after we have already set the new lines.
-                    This is because addwstr apparently needs the pointer alive and doesn't copy the contents of the string? Idk */
-                tbuffer_render(curwin->curses_window, curbuffer, curwin->prevl, &cursory, &cursorx);
-            }
+            bwindow_update(bwindows[i], &cursorx, &cursory);
         }
 
         move(selwiny + cursory, selwinx + cursorx);

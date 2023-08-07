@@ -39,8 +39,17 @@ Wide_string_list* command_parse(wchar_t* com, int coml) {
 
     }
 
-    wstrlist_debug_print(ret);
-    wstrlist_free(ret);
-    return NULL;
+    return ret;
 
+}
+
+Command_response command_execute(Wide_string_list* com) {
+    Command_response resp = { 0 };
+    if (com->item_count >= 1) {
+        Wide_string command = wstrlist_get(com, 0);
+    } else {
+        resp.resp = COMRESP_INVALID;
+        //resp.msg.str = L"No command given";
+        return resp;
+    }
 }

@@ -6,13 +6,15 @@
 
 typedef enum {
     COMRESP_OK = 1,
-    COMRESP_NOTFOUND = 2
+    COMRESP_NOGIVEN = 2, // No command given
+    COMRESP_INVALID = 3, // Command not found
+    COMRESP_NEEDARGS = 4, // Need more arguments
+    COMRESP_NOTFOUND = 5 // File/directory not found
 } Command_response_code;
 
 typedef struct {
     Command_response_code resp;
-    wchar_t* msg;
-    int msgl;
+    Wide_string msg;
 } Command_response;
 
 Wide_string_list* command_parse(wchar_t* com, int coml);

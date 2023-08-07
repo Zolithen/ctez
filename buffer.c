@@ -4,16 +4,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <stdbool.h>
+
+void tbuffer_init(Text_buffer* buf, int in_size) {
+    buf->b_size = in_size;
+    buf->before_cursor = ecalloc(in_size, sizeof(wchar_t));
+    buf->after_cursor = ecalloc(in_size, sizeof(wchar_t));
+    buf->ac_current_char = in_size;
+    buf->bc_current_char = 0;
+    buf->current_chars_stored = 0;
+    buf->flags = TB_WRITTABLE;
+}
 
 Text_buffer* tbuffer_create(int in_size) {
     Text_buffer* res = emalloc(sizeof(Text_buffer));
-    res->b_size = in_size;
-    res->before_cursor = ecalloc(in_size, sizeof(wchar_t));
-    res->after_cursor = ecalloc(in_size, sizeof(wchar_t));
-    res->ac_current_char = in_size;
-    res->bc_current_char = 0;
-    res->current_chars_stored = 0;
-    res->flags = TB_WRITTABLE;
+    tbuffer_init(res, in_size);
     return res;
 }
 
@@ -284,17 +289,56 @@ void tbuffer_free(Text_buffer* buf) {
 
 static struct {
     Text_buffer* buffers;
-    int first_free;
+    bool* free;
+    u32 current_alloc;
 } TB_system;
 
 void ts_start() {
-    TB_system.buffers = ecalloc(3, sizeof(Text_buffer)); // Starting allocation
-    TB_system.first_free = 0;
+    TB_system.current_alloc = 3;
+    TB_system.buffers = ecalloc(TB_system.current_alloc, sizeof(Text_buffer));
+    TB_system.free = ecalloc(TB_system.current_alloc, sizeof(bool));
+    for (u32 i = 0; i < TB_system.current_alloc; i++) {
+        //tbuffer_init(TB_system.buffers + i, 100);
+        TB_system.free[i] = true;
+    }
+
 }
 
-TBUFID FILE_new();
-TBUFID FILE_open(const char* name);
-bool FILE_save(TBUFID buf);
+void ts_shutdown() {
+    // TODO: maybe saved closed files?????????????
+    free(TB_system.buffers);
+    free(TB_system.free);
+}
+
+TBUFID ts_ensure_free() {
+    for (u32 i = 0; i < TB_system.current_alloc; i++) {
+        if (TB_system.free[i]) return i;
+    }
+    TB_system.buffers = erealloc(TB_system.buffers, sizeof(Text_buffer)*TB_system.current_alloc*2);
+    TB_system.free = erealloc(TB_system.free, sizeof(bool)*TB_system.current_alloc*2);
+    for (u32 i = TB_system.current_alloc; i < TB_system.current_alloc*2; i++) {
+        //tbuffer_init(TB_system.buffers + i, 100);
+        TB_system.free[i] = true;
+    }
+
+    TB_system.current_alloc *= 2;
+    return TB_system.current_alloc/2;
+}
+
+TBUFID tsFILE_new() {
+    TBUFID id = ts_ensure_free();
+    TB_system.free[id] = false;
+    /*free(buf.after_cursor);
+    free(buf.before_cursor);*/
+    tbuffer_init(&TB_system.buffers[id], 100);
+    return id;
+}
+
+TBUFID tsFILE_open(const char* name);
+bool tsFILE_save(TBUFID buf);
+void tsFILE_close(TBUFID buf) { // TODO: Get to error checking eventually
+
+}
 
 
 /*
@@ -303,8 +347,7 @@ bool FILE_save(TBUFID buf);
 
 Buffer_window* bwindow_create() {
     Buffer_window* b = ecalloc(1, sizeof(Buffer_window));
-    //b->curses_window = newwin(0, 0, 0, 0);
-    b->current_buffer = tbuffer_create(3);
+    b->buf_id = tsFILE_new();
     b->prevl = ecalloc(1, sizeof(Lines_buffer));
     b->flags = 0;
     return b;
@@ -313,7 +356,7 @@ Buffer_window* bwindow_create() {
 
 void bwindow_handle_keypress(Buffer_window* w, int key) {
 
-    Text_buffer* buf = w->current_buffer;
+    Text_buffer* buf = &TB_system.buffers[w->buf_id];
     bool is_comline = IS_FLAG_ON(buf->flags, TB_COMLINE);
     switch (key) {
     case 13:
@@ -346,7 +389,7 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
         tbuffer_move_cursor(buf, 1);
         break;
 
-    case KEY_UP:
+    case KEY_UP: // TODO: If lines only consist of \n some weird things happen
         if (is_comline) return;
         int linestart = tbuffer_last_nl_before(buf, buf->bc_current_char);
         if (linestart != 0) {
@@ -385,5 +428,19 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
 
     if ((key >= 32 && key <= 0x7E) || (key >= 0xA1 && key <= 0xFF)) {
         tbuffer_insert(buf, key);
+    }
+}
+
+void bwindow_buf_set_flags_on(Buffer_window* w, u8 flags) {
+    TB_system.buffers[w->buf_id].flags |= flags;
+}
+
+void bwindow_update(Buffer_window* w, int* cursorx, int* cursory) {
+    Text_buffer* curbuffer = &(TB_system.buffers[w->buf_id]);
+    if (IS_FLAG_ON(curbuffer->flags, TB_UPDATED)) {
+        SET_FLAG_OFF(curbuffer->flags, TB_UPDATED);
+        /* We return the current array of lines from the function to free them after we have already set the new lines.
+           This is because addwstr apparently needs the pointer alive and doesn't copy the contents of the string? Idk */
+        tbuffer_render(w->curses_window, curbuffer, w->prevl, cursory, cursorx);
     }
 }

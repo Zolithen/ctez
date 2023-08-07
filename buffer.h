@@ -46,6 +46,7 @@ typedef enum {
 
 /* Initializers */
 Text_buffer* tbuffer_create(int in_size);
+void         tbuffer_init(Text_buffer* buf, int in_size);
 Text_buffer* tbuffer_from_databuffer(Data_buffer* dat); /* Creates a Text_buffer with before_cursor from dat->data */
 
 /* Modifies the buffer */
@@ -71,13 +72,20 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
     Allows us to handle multiple files being opened at once, handles all memory stuff of that
     so we don't have 100 mallocs in different places
 */
+typedef struct {
+    char is_taken;
+    Text_buffer buf;
+} AText_buffer;
+
 typedef u32 TBUFID;
 
 void ts_start();
-void ts_search_free();
+void ts_shutdown();
+TBUFID ts_ensure_free();
 TBUFID tsFILE_new();
 TBUFID tsFILE_open(const char* name);
 bool tsFILE_save(TBUFID buf);
+void tsFILE_close(TBUFID buf);
 
 
 
@@ -87,10 +95,10 @@ bool tsFILE_save(TBUFID buf);
 */
 
 typedef struct {
-    Text_buffer* current_buffer;
     Lines_buffer* curl;
     Lines_buffer* prevl;
     WINDOW* curses_window;
+    TBUFID buf_id;
     u8 flags; // 1's bit visible
 } Buffer_window;
 
@@ -101,5 +109,7 @@ typedef enum {
 Buffer_window* bwindow_create();
 void bwindow_assign_tbuffer(Buffer_window* w, Text_buffer* b);
 void bwindow_handle_keypress(Buffer_window* w, int keypress);
+void bwindow_buf_set_flags_on(Buffer_window* w, u8 flags);
+void bwindow_update(Buffer_window* w, int* cursorx, int* cursory);
 
 #endif // BUFFER_H_INCLUDED
