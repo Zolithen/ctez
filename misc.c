@@ -3,9 +3,11 @@
 #include <assert.h>
 #include <string.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 void* ecalloc(size_t n, size_t size) {
     void* result = calloc(n, size);
+    printf("is null\n");
 	if (result == NULL) {
         exit(-1);
 	}

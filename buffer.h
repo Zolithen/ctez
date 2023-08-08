@@ -4,6 +4,7 @@
 #include <curses.h>
 #include <stdlib.h>
 #include "databuffer.h"
+#include "strlist.h"
 
 /* Text_buffer stores text in 2 different buffers: one that consists of text before the cursor
 and one that consists of text after the cursor. This is pretty handy for modifying lots of characters around
@@ -51,10 +52,12 @@ Text_buffer* tbuffer_from_databuffer(Data_buffer* dat); /* Creates a Text_buffer
 
 /* Modifies the buffer */
 bool tbuffer_insert(Text_buffer* buf, wchar_t c); /* Types a character where the cursor is */
+bool tbuffer_insert_string_bypass(Text_buffer* buf, wchar_t* str, int sz); /* Bypasses writtable tag */
 int tbuffer_move_cursor(Text_buffer* buf, int amount); /* Moves the cursor amount characters backwards(negative amount) or forwards (positive amount)*/
 
 /* Necessary memory management */
 void tbuffer_resize(Text_buffer* buf); /* Doubles the storage available in the buffer */
+void tbuffer_resize_custom(Text_buffer* buf, int sz); /* Enlarges the buffer by sz */
 void tbuffer_free(Text_buffer* buf);
 
 /* Search functions */
@@ -72,19 +75,25 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
     Allows us to handle multiple files being opened at once, handles all memory stuff of that
     so we don't have 100 mallocs in different places
 */
-typedef struct {
-    char is_taken;
-    Text_buffer buf;
-} AText_buffer;
+typedef enum {
+    TBSE_OK,
+    TBSE_ALREADY_FREE,
+    TBSE_OUT_OF_BOUNDS,
+    TBSE_FILE_NOT_FOUND,
+    TBSE_INVALID_FILE
+} TB_system_error_code;
+
+TB_system_error_code TB_system_error;
 
 typedef u32 TBUFID;
 
 void ts_start();
 void ts_shutdown();
+void ts_free_buffer(TBUFID id);
 TBUFID ts_ensure_free();
 TBUFID tsFILE_new();
-TBUFID tsFILE_open(const char* name);
-bool tsFILE_save(TBUFID buf);
+TBUFID tsFILE_open(const wchar_t* name);
+bool tsFILE_save(TBUFID buf, const char* name);
 void tsFILE_close(TBUFID buf);
 
 
@@ -102,6 +111,8 @@ typedef struct {
     u8 flags; // 1's bit visible
 } Buffer_window;
 
+Buffer_window** bwindows;
+
 typedef enum {
     BW_VISIBLE = 1
 } Buffer_window_flags;
@@ -110,6 +121,8 @@ Buffer_window* bwindow_create();
 void bwindow_assign_tbuffer(Buffer_window* w, Text_buffer* b);
 void bwindow_handle_keypress(Buffer_window* w, int keypress);
 void bwindow_buf_set_flags_on(Buffer_window* w, u8 flags);
+void bwindow_buf_set_flags_off(Buffer_window* w, u8 flags);
+void bwindow_buf_insert_text(Buffer_window* w, Wide_string str);
 void bwindow_update(Buffer_window* w, int* cursorx, int* cursory);
 
 #endif // BUFFER_H_INCLUDED

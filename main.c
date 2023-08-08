@@ -46,19 +46,30 @@ void show_bottom_of_screen(Buffer_window** wins, int winh, int winw) {
     delwin(wins[TWINCOM]->curses_window);
 
     if (winw % 2 == 0) {
-        wins[TWINCOM]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 1, winw/2 - 1, winh - BOTTOM_SECTION_HEIGHT + 1, 0);
+        wins[TWINCOM]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 3, winw/2 - 1, winh - BOTTOM_SECTION_HEIGHT + 1, 0);
+        wins[TWINCOMINPUT]->curses_window = newwin(1, winw/2 - 1, winh - 1, 0);
     } else {
-        wins[TWINCOM]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 1, (int)floor(winw/2), winh - BOTTOM_SECTION_HEIGHT + 1, 0);
+        wins[TWINCOM]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 3, (int)floor(winw/2), winh - BOTTOM_SECTION_HEIGHT + 1, 0);
+        wins[TWINCOMINPUT]->curses_window = newwin(1, (int)floor(winw/2), winh - 1, 0);
     }
 
-    bwindow_buf_set_flags_on(wins[TWINCOM], TB_UPDATED | TB_ENDSCROLL | TB_COMLINE);
+    bwindow_buf_set_flags_on(wins[TWINCOM], TB_UPDATED);
+    bwindow_buf_set_flags_off(wins[TWINCOM], TB_WRITTABLE);
+
+    bwindow_buf_set_flags_on(wins[TWINCOMINPUT], TB_COMLINE);
+
+    for (int i = 0; i < winw; i++) {
+        mvaddch(winh - BOTTOM_SECTION_HEIGHT, i, 0x2501);
+        if (i < winw/2) mvaddch(winh - 2, i, 0x2501);
+    }
 }
 
 void show_monolithic_layout(Buffer_window** wins, int winh, int winw) {
     erase();
-    for (int i = TWIN2; i < MAX_WINDOWS; i++) {
-        SET_FLAG_OFF(wins[i]->flags, BW_VISIBLE);
-    }
+    SET_FLAG_OFF(wins[TWIN2]->flags, BW_VISIBLE);
+    SET_FLAG_OFF(wins[TWIN3]->flags, BW_VISIBLE);
+    SET_FLAG_OFF(wins[TWIN4]->flags, BW_VISIBLE);
+
     wins[TWIN1]->flags |= BW_VISIBLE;
     delwin(wins[TWIN1]->curses_window);
 
@@ -70,9 +81,10 @@ void show_monolithic_layout(Buffer_window** wins, int winh, int winw) {
 
 void show_double_layout(Buffer_window** wins, int winh, int winw) {
     erase();
-    for (int i = TWIN3; i < MAX_WINDOWS; i++) {
-        SET_FLAG_OFF(wins[i]->flags, BW_VISIBLE);
-    }
+
+    SET_FLAG_OFF(wins[TWIN3]->flags, BW_VISIBLE);
+    SET_FLAG_OFF(wins[TWIN3]->flags, BW_VISIBLE);
+
     wins[TWIN1]->flags |= BW_VISIBLE;
     delwin(wins[TWIN1]->curses_window);
     wins[TWIN2]->flags |= BW_VISIBLE;
@@ -102,7 +114,7 @@ void show_double_layout(Buffer_window** wins, int winh, int winw) {
     refresh();
 }
 
-int main(int argc, char** argv) {
+int main() {
 
     // Start up curses
     if (start_display() == -1) return -1;
@@ -112,20 +124,22 @@ int main(int argc, char** argv) {
     int selwinx, selwiny;
 
     ts_start();
+    TB_system_error = TBSE_OK;
 
     // Structs
-    Buffer_window** bwindows = ecalloc(MAX_WINDOWS, sizeof(Buffer_window*));
+    bwindows = ecalloc(MAX_WINDOWS, sizeof(Buffer_window*));
 
     // Setup layouts
-    int editor_layout = 0; // 0 is monolithic, 1 is double & 2 is four
+    //int editor_layout = 0; // 0 is monolithic, 1 is double & 2 is four
 
-    for (int i = TWIN1; i < MAX_WINDOWS; i++) {
+    for (int i = TWIN4; i < MAX_WINDOWS; i++) {
         bwindows[i] = bwindow_create();
         bwindows[i]->curses_window = newwin(1, 1, 0, 0);
     }
 
     bwindows[TWINCOM] = bwindow_create();
     bwindows[TWINFILE] = bwindow_create();
+    bwindows[TWINCOMINPUT] = bwindow_create();
 
     show_double_layout(bwindows, winh, winw);
 
@@ -167,36 +181,12 @@ int main(int argc, char** argv) {
     wstrlist_debug_print(test);
     wstrlist_free(test);*/
 
-
-
-    /*if (argc > 1) {
-        FILE* f = fopen(argv[1], "r");
-        Data_buffer* dat = databuffer_new(20);
-        int c = 0;
-        while(true) {
-            c = fgetc(f);
-            if (feof(f)) break;
-            databuffer_add_byte(dat, (u8) c);
-        }
-        databuffer_add_byte(dat, '\0');
-
-        Data_buffer* utf16 = utftrans_8to16(dat->data, dat->cursize);
-        move(6, 0);
-
-        // TODO: error checking
-        free(main_buffer);
-        main_buffer = tbuffer_from_databuffer(utf16);
-        fclose(f);
-        databuffer_free(dat);
-        databuffer_free(utf16);
-    }*/
     refresh();
     bool is_running = true;
     while (is_running) {
         platform_sleep(1);
 
         Buffer_window* curwin = bwindows[selected_window];
-        //Text_buffer* curbuffer = curwin->current_buffer;
         int keypress = getch();
 
         if (keypress == 27) {
@@ -210,7 +200,7 @@ int main(int argc, char** argv) {
 
             refresh();
         } else if (keypress == KEY_F(1)) {
-            if (selected_window == TWIN2) selected_window = TWIN1;
+            if (selected_window == TWIN2) selected_window = TWINCOMINPUT;
             else selected_window = TWIN2;
             getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
             bwindow_buf_set_flags_on(bwindows[selected_window], TB_UPDATED);

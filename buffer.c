@@ -1,5 +1,6 @@
 #include "buffer.h"
 #include "misc.h"
+#include "command.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -52,9 +53,42 @@ bool tbuffer_insert(Text_buffer* buf, wchar_t c) {
     return false;
 }
 
+bool tbuffer_insert_string_bypass(Text_buffer* buf, wchar_t* str, int sz) {
+    if (buf->current_chars_stored + sz >= buf->b_size) {
+        tbuffer_resize(buf); // TODO: sometimes we need more than size*2 to store the new string. Somehow the other resizing method crashes after a while
+        printf("resized\n");
+    }
+    memcpy(buf->before_cursor + buf->bc_current_char, str, sizeof(wchar_t)*(sz - 1)); // We don't want to copy the terminator
+    buf->current_chars_stored += sz - 1;
+    buf->bc_current_char += sz - 1;
+
+    buf->flags |= TB_UPDATED;
+
+    return true;
+}
+
 void tbuffer_resize(Text_buffer* buf) {
     int old_size = buf->b_size;
     buf->b_size *= 2;
+
+    // Copy before
+    wchar_t* new_before = ecalloc(buf->b_size, sizeof(wchar_t));
+    memcpy(new_before, buf->before_cursor, sizeof(wchar_t)*buf->bc_current_char);
+    free(buf->before_cursor);
+    buf->before_cursor = new_before;
+
+    // Copy after. We need the contents of the buffer to still start from the end.
+    wchar_t* new_after = ecalloc(buf->b_size, sizeof(wchar_t));
+    memcpy(new_after + old_size, buf->after_cursor, sizeof(wchar_t)*old_size);
+    free(buf->after_cursor);
+    buf->after_cursor = new_after;
+
+    buf->ac_current_char += buf->b_size - old_size;
+}
+
+void tbuffer_resize_custom(Text_buffer* buf, int sz) { // TODO: doesn't work
+    int old_size = buf->b_size;
+    buf->b_size += sz;
 
     // Copy before
     wchar_t* new_before = ecalloc(buf->b_size, sizeof(wchar_t));
@@ -106,7 +140,7 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
     int winw = getmaxx(win);
     int center = winh % 2 == 0 ? winh/2 : (winh-1)/2;
     int line_offset = 0;
-    wchar_t** lines = ecalloc(winh, sizeof(wchar_t*));
+    wchar_t** lines = ecalloc(winh, sizeof(wchar_t*)); // this one used to crash using the resize custom above
     bool*     lines_hasinit = ecalloc(winh, sizeof(bool));
     int*      lines_size = ecalloc(winh, sizeof(int)); // Wrap size
     int c_linebef_size = 0;
@@ -301,15 +335,23 @@ void ts_start() {
         //tbuffer_init(TB_system.buffers + i, 100);
         TB_system.free[i] = true;
     }
+    TB_system_error = TBSE_OK;
 
 }
 
 void ts_shutdown() {
     // TODO: maybe saved closed files?????????????
+    for (u32 i = 0; i < TB_system.current_alloc; i++) {
+        if (!TB_system.free[i]) {
+            free(TB_system.buffers[i].after_cursor);
+            free(TB_system.buffers[i].before_cursor);
+        }
+    }
     free(TB_system.buffers);
     free(TB_system.free);
 }
 
+// Returns the ID of the uninited buffer
 TBUFID ts_ensure_free() {
     for (u32 i = 0; i < TB_system.current_alloc; i++) {
         if (TB_system.free[i]) return i;
@@ -325,6 +367,21 @@ TBUFID ts_ensure_free() {
     return TB_system.current_alloc/2;
 }
 
+void ts_free_buffer(TBUFID id) {
+    if (id < TB_system.current_alloc) {
+        if (!TB_system.free[id]) {
+            TB_system.free[id] = true;
+            Text_buffer b = TB_system.buffers[id];
+            free(b.after_cursor);
+            free(b.before_cursor);
+        } else {
+            TB_system_error = TBSE_ALREADY_FREE;
+        }
+    } else {
+        TB_system_error = TBSE_OUT_OF_BOUNDS;
+    }
+}
+
 TBUFID tsFILE_new() {
     TBUFID id = ts_ensure_free();
     TB_system.free[id] = false;
@@ -334,9 +391,47 @@ TBUFID tsFILE_new() {
     return id;
 }
 
-TBUFID tsFILE_open(const char* name);
+TBUFID tsFILE_open(const wchar_t* name) {
+    FILE* f = fopen(name, "r");
+    if (f == NULL) {
+        TB_system_error = TBSE_FILE_NOT_FOUND;
+        return;
+    }
+    Data_buffer* dat = databuffer_new(100);
+    int c = 0;
+    while (true) {
+        c = fgetc(f);
+        if (feof(f)) break;
+        databuffer_add_byte(dat, (u8)c);
+    }
+    databuffer_add_byte(dat, '\0');
+
+    Data_buffer* utf16 = utftrans_8to16(dat->data, dat->cursize);
+
+    if (utf16->cursize % 2 == 1) {
+        TB_system_error = TBSE_INVALID_FILE;
+        return;
+    }
+    TBUFID id = ts_ensure_free();
+    Text_buffer buf = TB_system.buffers[id];
+    buf.b_size = utf16->cursize/2;
+    buf.before_cursor = ecalloc(buf.b_size, sizeof(wchar_t));
+    buf.after_cursor = ecalloc(buf.b_size, sizeof(wchar_t));
+    buf.ac_current_char = buf.b_size;
+    buf.bc_current_char = buf.b_size - 1;
+    buf.current_chars_stored = buf.b_size - 1;
+    buf.flags = TB_WRITTABLE | TB_UPDATED;
+
+    memcpy(buf.before_cursor, utf16->data, sizeof(wchar_t)*(buf.b_size - 1));
+    databuffer_free(utf16);
+    databuffer_free(dat);
+    return id;
+}
+
 bool tsFILE_save(TBUFID buf, const char* name) { // TODO: proper error checking
-    FILE* f = fopen(name, "w+");
+    //FILE* f = fopen(name, "w+");
+
+    return true;
 }
 void tsFILE_close(TBUFID buf) { // TODO: Get to error checking eventually
 
@@ -365,7 +460,6 @@ Buffer_window* bwindow_create() {
     return b;
 }
 
-
 void bwindow_handle_keypress(Buffer_window* w, int key) {
 
     Text_buffer* buf = &TB_system.buffers[w->buf_id];
@@ -373,7 +467,15 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
     switch (key) {
     case 13:
     case PADENTER:
-        if (!is_comline) tbuffer_insert(buf, '\n');
+        if (is_comline) {
+            Wide_string_list* com = command_parse(buf->before_cursor, buf->bc_current_char + 1); // TODO: enter in the middle of a command the command gets executed
+            Command_response resp = command_execute(com);
+            if (resp.resp != COMRESP_OK) {
+
+            }
+            free(com);
+        }
+        else tbuffer_insert(buf, '\n');
         break;
 
     case 9:
@@ -445,6 +547,18 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
 
 void bwindow_buf_set_flags_on(Buffer_window* w, u8 flags) {
     TB_system.buffers[w->buf_id].flags |= flags;
+}
+
+void bwindow_buf_set_flags_off(Buffer_window* w, u8 flags) {
+    SET_FLAG_OFF(TB_system.buffers[w->buf_id].flags, flags);
+}
+
+void bwindow_buf_insert_text(Buffer_window* w, Wide_string str) {
+    if (w->buf_id >= TB_system.current_alloc) {
+        TB_system_error = TBSE_OUT_OF_BOUNDS;
+        return;
+    }
+    tbuffer_insert_string_bypass(&TB_system.buffers[w->buf_id], str.str, str.size);
 }
 
 void bwindow_update(Buffer_window* w, int* cursorx, int* cursory) {

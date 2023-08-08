@@ -3,8 +3,10 @@
 #include "types.h"
 #include "misc.h"
 #include "strlist.h"
+#include "buffer.h"
 #include <string.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 Wide_string_list* command_parse(wchar_t* com, int coml) {
     Wide_string_list* ret = ecalloc(1, sizeof(Wide_string_list));
@@ -47,9 +49,39 @@ Command_response command_execute(Wide_string_list* com) {
     Command_response resp = { 0 };
     if (com->item_count >= 1) {
         Wide_string command = wstrlist_get(com, 0);
+        if (wstrcmp(command.str, L"open", command.size, 5)) {
+            Wide_string file_name = wstrlist_get(com, 1);
+            Wide_string buf = wstrlist_get(com, 2);
+            TBUFID id = tsFILE_open(file_name.str); // TODO: turn this wstr to a normal str so that the function actually works
+            if (TB_system_error != TBSE_OK) {
+                if (TB_system_error == TBSE_FILE_NOT_FOUND) {
+                    Wide_string msg = { 0 };
+                    msg.str = L"File not found";
+                    msg.size = 15;
+                    bwindow_buf_insert_text(bwindows[TWINCOM], msg);
+                }
+                if (TB_system_error == TBSE_INVALID_FILE) {
+                    Wide_string msg = { 0 };
+                    msg.str = L"File invalid";
+                    msg.size = 13;
+                    bwindow_buf_insert_text(bwindows[TWINCOM], msg);
+                    free(msg.str);
+                }
+                TB_system_error = TBSE_OK;
+                return resp;
+            }
+
+            ts_free_buffer(bwindows[TWIN1]->buf_id);
+            bwindows[TWIN1]->buf_id = id;
+            bwindow_buf_set_flags_on(bwindows[TWIN1], TB_UPDATED);
+
+            //FILE* f = fopen(name, "r+");
+        }
     } else {
         resp.resp = COMRESP_INVALID;
         //resp.msg.str = L"No command given";
-        return resp;
     }
+
+
+    return resp;
 }
