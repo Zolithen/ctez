@@ -335,11 +335,23 @@ TBUFID tsFILE_new() {
 }
 
 TBUFID tsFILE_open(const char* name);
-bool tsFILE_save(TBUFID buf);
+bool tsFILE_save(TBUFID buf, const char* name) { // TODO: proper error checking
+    FILE* f = fopen(name, "w+");
+}
 void tsFILE_close(TBUFID buf) { // TODO: Get to error checking eventually
 
 }
 
+/*
+FILE* f;
+f = fopen("test.txt", "w+");
+Data_buffer* dat = utftrans_16to8(main_buffer->before_cursor, main_buffer->bc_current_char);
+for(u64 i = 0; i < dat->cursize; i++) {
+    fputc(dat->data[i], f);
+}
+fclose(f);
+databuffer_free(dat);
+*/
 
 /*
     BUFFER WINDOW STUFF
