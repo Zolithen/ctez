@@ -92,7 +92,7 @@ void ts_shutdown();
 void ts_free_buffer(TBUFID id);
 TBUFID ts_ensure_free();
 TBUFID tsFILE_new();
-TBUFID tsFILE_open(const wchar_t* name);
+TBUFID tsFILE_open(const u8* name);
 bool tsFILE_save(TBUFID buf, const char* name);
 void tsFILE_close(TBUFID buf);
 

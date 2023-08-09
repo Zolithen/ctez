@@ -53,7 +53,7 @@ void show_bottom_of_screen(Buffer_window** wins, int winh, int winw) {
         wins[TWINCOMINPUT]->curses_window = newwin(1, (int)floor(winw/2), winh - 1, 0);
     }
 
-    bwindow_buf_set_flags_on(wins[TWINCOM], TB_UPDATED);
+    bwindow_buf_set_flags_on(wins[TWINCOM], TB_UPDATED | TB_ENDSCROLL);
     bwindow_buf_set_flags_off(wins[TWINCOM], TB_WRITTABLE);
 
     bwindow_buf_set_flags_on(wins[TWINCOMINPUT], TB_COMLINE);
@@ -116,9 +116,21 @@ void show_double_layout(Buffer_window** wins, int winh, int winw) {
 
 int main() {
 
-    char* test = ecalloc(4, sizeof(char));
-    char* test1 = ecalloc(4, sizeof(char));
-    memcpy(test, test1, 0);
+    // low byte is left, high byte is right (low byte is index divisible by 2)
+    /*wchar_t* p = emalloc(3*sizeof(wchar_t));
+    p[0] = 'w';
+    p[1] = 'a';
+    p[2] = '\0';
+    u8* test = wstrdgr(p, 3);
+    printf("%s\n", test);
+    free(p);
+    free(test);*/
+
+    /*wchar_t* p = L"HOLA";
+    wchar_t* p1 = L" MUNDO";
+    wchar_t* t = wstrcat(p, p1, 5, 7);
+    printf("%S\n", t);
+    free(t);*/
 
     // Start up curses
     if (start_display() == -1) return -1;
@@ -147,7 +159,7 @@ int main() {
 
     show_double_layout(bwindows, winh, winw);
 
-    int selected_window = TWIN2;
+    int selected_window = TWIN1;
     getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
 
     /*Wide_string_list* test = command_parse(L"open \"D:/c/proj/ctez\"", 22); // with terminator
@@ -204,8 +216,8 @@ int main() {
 
             refresh();
         } else if (keypress == KEY_F(1)) {
-            if (selected_window == TWIN2) selected_window = TWINCOMINPUT;
-            else selected_window = TWIN2;
+            if (selected_window == TWIN1) selected_window = TWINCOMINPUT;
+            else selected_window = TWIN1;
             getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
             bwindow_buf_set_flags_on(bwindows[selected_window], TB_UPDATED);
         }

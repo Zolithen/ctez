@@ -10,7 +10,7 @@ void* debug_calloc(size_t n, size_t size, const char* name, int line) {
     if (res == NULL) {
         exit(-1);
     }
-    printf("Allocated %d bytes in %p on %s L:%d\n", n*size, res, name, line);
+    printf("Allocated %d bytes in %p on %s L:%d\n", (int)(n*size), res, name, line);
     return res;
 }
 
@@ -19,7 +19,7 @@ void* debug_malloc(size_t size, const char* name, int line) {
 	if (result == NULL) {
         exit(-1);
 	}
-	printf("Allocated %d bytes in %p on %s L:%d\n", size, result, name, line);
+	printf("Allocated %d bytes in %p on %s L:%d\n", (int)size, result, name, line);
 	return result;
 }
 void* debug_realloc(void* block, size_t size, const char* name, int line) {
@@ -27,7 +27,7 @@ void* debug_realloc(void* block, size_t size, const char* name, int line) {
 	if (result == NULL) {
         exit(-1);
 	}
-	printf("Reallocated block %p to %p with %d bytes in %s L:%d\n", block, result, size, name, line);
+	printf("Reallocated block %p to %p with %d bytes in %s L:%d\n", block, result, (int)size, name, line);
 	return result;
 }
 void debug_free(void* block, const char* name, int line) {
@@ -75,11 +75,21 @@ int maxi(int a, int b) {
 }
 
 // TODO: ensure this works correctly
-wchar_t* wstrcat(const wchar_t* first, const wchar_t* second, int szfirst, int szsecond) {
+/* This function for some reason doesn't have the convention of sizes containing the terminator, because it's used in a place of strings with terminators */
+wchar_t* wstrcat_in_tbuffer_render(const wchar_t* first, const wchar_t* second, int szfirst, int szsecond) {
     wchar_t* res = ecalloc(szfirst + szsecond + 1, sizeof(wchar_t));
     memcpy(res, first, szfirst*sizeof(wchar_t));
     memcpy(res+szfirst, second, szsecond*sizeof(wchar_t));
     res[szfirst + szsecond] = 0;
+    return res;
+}
+
+/* Concatenates 2 wchar_t strings given their sizes */
+wchar_t* wstrcat(const wchar_t* first, const wchar_t* second, int szfirst, int szsecond, int* ressize) {
+    wchar_t* res = ecalloc(szfirst + szsecond - 1, sizeof(wchar_t));
+    memcpy(res, first, (szfirst-1)*sizeof(wchar_t) );
+    memcpy(res+szfirst - 1, second, szsecond*sizeof(wchar_t));
+    if (ressize != NULL) *ressize = szfirst + szsecond - 1;
     return res;
 }
 
@@ -93,6 +103,14 @@ bool wstrcmp(const wchar_t* first, const wchar_t* second, int szfirst, int szsec
     }
 
     return false;
+}
+
+u8* wstrdgr(const wchar_t* str, int sz) {
+    const wchar_t* p = str;
+    u8* cur = (u8*)p;
+    u8* res = ecalloc(sz, sizeof(u8));
+    for (int i = 0; i < sz; i++) res[i] = cur[2*i];
+    return res;
 }
 
 /* Description of the algorithm:

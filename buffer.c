@@ -55,7 +55,7 @@ bool tbuffer_insert(Text_buffer* buf, wchar_t c) {
 
 bool tbuffer_insert_string_bypass(Text_buffer* buf, wchar_t* str, int sz) {
     if (buf->current_chars_stored + sz - 1 >= buf->b_size) {
-        tbuffer_resize_custom(buf, sz); // TODO: sometimes we need more than size*2 to store the new string. Somehow the other resizing method crashes after a while
+        tbuffer_resize_custom(buf, sz);
     }
     memcpy(buf->before_cursor + buf->bc_current_char, str, sizeof(wchar_t)*(sz - 1)); // We don't want to copy the terminator
     buf->current_chars_stored += sz;
@@ -97,7 +97,8 @@ void tbuffer_resize_custom(Text_buffer* buf, int sz) { // TODO: doesn't work
 
     // Copy after. We need the contents of the buffer to still start from the end.
     wchar_t* new_after = ecalloc(buf->b_size, sizeof(wchar_t));
-    memcpy(new_after + (buf->b_size - old_size), buf->after_cursor, sizeof(wchar_t)*old_size);
+    memcpy(new_after + (buf->b_size - old_size), buf->after_cursor, sizeof(wchar_t)*old_size); /* Please make sure you actually know the algorithms before
+    implementing them */
     free(buf->after_cursor);
     buf->after_cursor = new_after;
 
@@ -223,7 +224,7 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
 
     // Correctly get the current line. We have the first part in lines[center] and the second one in current_line_after.
     wchar_t* current_line_before = lines[center];
-    lines[center] = wstrcat(current_line_before, current_line_after, c_linebef_size, c_lineaf_size);
+    lines[center] = wstrcat_in_tbuffer_render(current_line_before, current_line_after, c_linebef_size, c_lineaf_size);
     lines_size[center] = (int)floor((c_linebef_size + c_lineaf_size)/winw);
 
     // Render everything
@@ -390,8 +391,8 @@ TBUFID tsFILE_new() {
     return id;
 }
 
-TBUFID tsFILE_open(const wchar_t* name) {
-    FILE* f = fopen(name, "r");
+TBUFID tsFILE_open(const u8* name) {
+    FILE* f = fopen((char*)name, "r");
     if (f == NULL) {
         TB_system_error = TBSE_FILE_NOT_FOUND;
         return 2000000;
@@ -412,18 +413,19 @@ TBUFID tsFILE_open(const wchar_t* name) {
         return;
     }
     TBUFID id = ts_ensure_free();
-    Text_buffer buf = TB_system.buffers[id];
-    buf.b_size = utf16->cursize/2;
-    buf.before_cursor = ecalloc(buf.b_size, sizeof(wchar_t));
-    buf.after_cursor = ecalloc(buf.b_size, sizeof(wchar_t));
-    buf.ac_current_char = buf.b_size;
-    buf.bc_current_char = buf.b_size - 1;
-    buf.current_chars_stored = buf.b_size - 1;
-    buf.flags = TB_WRITTABLE | TB_UPDATED;
+    Text_buffer* buf = &(TB_system.buffers[id]);
+    buf->b_size = utf16->cursize/2;
+    buf->before_cursor = ecalloc(buf->b_size, sizeof(wchar_t));
+    buf->after_cursor = ecalloc(buf->b_size, sizeof(wchar_t));
+    buf->ac_current_char = buf->b_size;
+    buf->bc_current_char = buf->b_size - 1;
+    buf->current_chars_stored = buf->b_size - 1;
+    buf->flags = TB_WRITTABLE | TB_UPDATED;
 
-    memcpy(buf.before_cursor, utf16->data, sizeof(wchar_t)*(buf.b_size - 1));
+    memcpy(buf->before_cursor, utf16->data, sizeof(wchar_t)*(buf->b_size - 1));
     databuffer_free(utf16);
     databuffer_free(dat);
+
     return id;
 }
 
@@ -467,11 +469,8 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
     case 13:
     case PADENTER:
         if (is_comline) {
-            Wide_string_list* com = command_parse(buf->before_cursor, buf->bc_current_char+1); // TODO: enter in the middle of a command the command gets executed
+            Wide_string_list* com = command_parse(buf->before_cursor, buf->current_chars_stored+1); // TODO: enter in the middle of a command the command gets executed
             Command_response resp = command_execute(com);
-            if (resp.resp != COMRESP_OK) {
-
-            }
             free(com);
         }
         else tbuffer_insert(buf, '\n');
@@ -485,6 +484,7 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
         if (buf->bc_current_char != 0) {
             buf->before_cursor[buf->bc_current_char-1] = 0;
             buf->bc_current_char--;
+            buf->current_chars_stored--;
             buf->flags |= TB_UPDATED;
         }
         break;
