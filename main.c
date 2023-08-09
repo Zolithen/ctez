@@ -116,6 +116,10 @@ void show_double_layout(Buffer_window** wins, int winh, int winw) {
 
 int main() {
 
+    char* test = ecalloc(4, sizeof(char));
+    char* test1 = ecalloc(4, sizeof(char));
+    memcpy(test, test1, 0);
+
     // Start up curses
     if (start_display() == -1) return -1;
     int winh, winw;
@@ -221,6 +225,7 @@ int main() {
         refresh();
     }
 
+    ts_shutdown();
     endwin();
     return 0;
 }

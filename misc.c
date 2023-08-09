@@ -5,9 +5,39 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+void* debug_calloc(size_t n, size_t size, const char* name, int line) {
+    void* res = calloc(n, size);
+    if (res == NULL) {
+        exit(-1);
+    }
+    printf("Allocated %d bytes in %p on %s L:%d\n", n*size, res, name, line);
+    return res;
+}
+
+void* debug_malloc(size_t size, const char* name, int line) {
+    void* result = malloc(size);
+	if (result == NULL) {
+        exit(-1);
+	}
+	printf("Allocated %d bytes in %p on %s L:%d\n", size, result, name, line);
+	return result;
+}
+void* debug_realloc(void* block, size_t size, const char* name, int line) {
+    void* result = realloc(block, size);
+	if (result == NULL) {
+        exit(-1);
+	}
+	printf("Reallocated block %p to %p with %d bytes in %s L:%d\n", block, result, size, name, line);
+	return result;
+}
+void debug_free(void* block, const char* name, int line) {
+    //free(block);
+    printf("Freed block %p on %s L:%d\n", block, name, line);
+}
+
+#ifndef MEMORY_LOG
 void* ecalloc(size_t n, size_t size) {
     void* result = calloc(n, size);
-    printf("is null\n");
 	if (result == NULL) {
         exit(-1);
 	}
@@ -29,6 +59,13 @@ void* erealloc(void* block, size_t size) {
 	}
 	return result;
 }
+
+void efree(void* block) {
+    free(block);
+}
+#endif
+
+
 
 int mini(int a, int b) {
     return a > b ? b : a;

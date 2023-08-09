@@ -65,12 +65,12 @@ Command_response command_execute(Wide_string_list* com) {
                     msg.str = L"File invalid";
                     msg.size = 13;
                     bwindow_buf_insert_text(bwindows[TWINCOM], msg);
-                    free(msg.str);
                 }
                 TB_system_error = TBSE_OK;
                 return resp;
             }
 
+            printf("how\n");
             ts_free_buffer(bwindows[TWIN1]->buf_id);
             bwindows[TWIN1]->buf_id = id;
             bwindow_buf_set_flags_on(bwindows[TWIN1], TB_UPDATED);

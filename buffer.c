@@ -54,12 +54,11 @@ bool tbuffer_insert(Text_buffer* buf, wchar_t c) {
 }
 
 bool tbuffer_insert_string_bypass(Text_buffer* buf, wchar_t* str, int sz) {
-    if (buf->current_chars_stored + sz >= buf->b_size) {
-        tbuffer_resize(buf); // TODO: sometimes we need more than size*2 to store the new string. Somehow the other resizing method crashes after a while
-        printf("resized\n");
+    if (buf->current_chars_stored + sz - 1 >= buf->b_size) {
+        tbuffer_resize_custom(buf, sz); // TODO: sometimes we need more than size*2 to store the new string. Somehow the other resizing method crashes after a while
     }
     memcpy(buf->before_cursor + buf->bc_current_char, str, sizeof(wchar_t)*(sz - 1)); // We don't want to copy the terminator
-    buf->current_chars_stored += sz - 1;
+    buf->current_chars_stored += sz;
     buf->bc_current_char += sz - 1;
 
     buf->flags |= TB_UPDATED;
@@ -79,7 +78,7 @@ void tbuffer_resize(Text_buffer* buf) {
 
     // Copy after. We need the contents of the buffer to still start from the end.
     wchar_t* new_after = ecalloc(buf->b_size, sizeof(wchar_t));
-    memcpy(new_after + old_size, buf->after_cursor, sizeof(wchar_t)*old_size);
+    memcpy(new_after + old_size, buf->after_cursor, sizeof(wchar_t)*old_size); // We add old_size bcs buf->b_size - old_size = old_size
     free(buf->after_cursor);
     buf->after_cursor = new_after;
 
@@ -88,7 +87,7 @@ void tbuffer_resize(Text_buffer* buf) {
 
 void tbuffer_resize_custom(Text_buffer* buf, int sz) { // TODO: doesn't work
     int old_size = buf->b_size;
-    buf->b_size += sz;
+    buf->b_size += sz + 1;
 
     // Copy before
     wchar_t* new_before = ecalloc(buf->b_size, sizeof(wchar_t));
@@ -98,7 +97,7 @@ void tbuffer_resize_custom(Text_buffer* buf, int sz) { // TODO: doesn't work
 
     // Copy after. We need the contents of the buffer to still start from the end.
     wchar_t* new_after = ecalloc(buf->b_size, sizeof(wchar_t));
-    memcpy(new_after + old_size, buf->after_cursor, sizeof(wchar_t)*old_size);
+    memcpy(new_after + (buf->b_size - old_size), buf->after_cursor, sizeof(wchar_t)*old_size);
     free(buf->after_cursor);
     buf->after_cursor = new_after;
 
@@ -395,7 +394,7 @@ TBUFID tsFILE_open(const wchar_t* name) {
     FILE* f = fopen(name, "r");
     if (f == NULL) {
         TB_system_error = TBSE_FILE_NOT_FOUND;
-        return;
+        return 2000000;
     }
     Data_buffer* dat = databuffer_new(100);
     int c = 0;
@@ -468,7 +467,7 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
     case 13:
     case PADENTER:
         if (is_comline) {
-            Wide_string_list* com = command_parse(buf->before_cursor, buf->bc_current_char + 1); // TODO: enter in the middle of a command the command gets executed
+            Wide_string_list* com = command_parse(buf->before_cursor, buf->bc_current_char+1); // TODO: enter in the middle of a command the command gets executed
             Command_response resp = command_execute(com);
             if (resp.resp != COMRESP_OK) {
 
@@ -570,3 +569,4 @@ void bwindow_update(Buffer_window* w, int* cursorx, int* cursory) {
         tbuffer_render(w->curses_window, curbuffer, w->prevl, cursory, cursorx);
     }
 }
+
