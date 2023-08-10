@@ -1,26 +1,29 @@
-#ifndef LIST_H_INCLUDED
-#define LIST_H_INCLUDED
+#ifndef STRLIST_H_INCLUDED
+#define STRLIST_H_INCLUDED
 
+#include "types.h"
 #include <stdlib.h>
 
+// TODO: Change instances of Wide_string_list to just List
 typedef struct {
     wchar_t* str;
-    int size;
+    u32 size;
 } Wide_string;
 
 typedef struct {
-    int* locations;
+    u32* locations;
     wchar_t* data;
-    int wchars_allocated;
-    int wchars_used;
-    int item_count;
+    u32 wchars_allocated;
+    u32 wchars_used;
+    u32  item_count;
 } Wide_string_list;
 
-Wide_string_list* wstrlist_new(int insize);
-void wstrlist_add(Wide_string_list* l, wchar_t* str, int sz); /* We expect str to end with a terminator (\0) */
-void wstrlist_add_and_terminator(Wide_string_list* l, wchar_t* str, int sz); /* For str without terminator */
-Wide_string wstrlist_get(Wide_string_list* l, int pos);
+void wstrlist_init(Wide_string_list* l, u32 insize);
+Wide_string_list* wstrlist_new(u32 insize);
+void wstrlist_add(Wide_string_list* l, const wchar_t* str, u32 sz); /* We expect str to end with a terminator (\0) */
+void wstrlist_add_and_terminator(Wide_string_list* l, const wchar_t* str, u32 sz); /* For str without terminator */
+Wide_string wstrlist_get(Wide_string_list* l, u32 pos);
 void wstrlist_free(Wide_string_list* l);
 void wstrlist_debug_print(Wide_string_list* l);
 
-#endif // LIST_H_INCLUDED
+#endif // STRLIST_H_INCLUDED

@@ -19,8 +19,8 @@ typedef long i64;
 #define BOTTOM_SECTION_HEIGHT 12
 #define MAX_WINDOWS 7
 #define TWINCOM 0
-#define TWINFILE 1
-#define TWINCOMINPUT 2
+#define TWINCOMINPUT 1
+#define TWINFILE 2
 #define TWIN1 MAX_WINDOWS - 1
 #define TWIN2 MAX_WINDOWS - 2
 #define TWIN3 MAX_WINDOWS - 3

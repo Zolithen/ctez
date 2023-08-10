@@ -1,6 +1,7 @@
 #include "buffer.h"
 #include "misc.h"
 #include "command.h"
+#include "list.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -402,7 +403,6 @@ TBUFID tsFILE_new() {
 }
 
 TBUFID tsFILE_open(const u8* name) {
-    printf("opening '%s'\n", name);
     FILE* f = fopen((char*)name, "r");
     if (f == NULL) {
         TB_system_error = TBSE_FILE_NOT_FOUND;
@@ -421,7 +421,7 @@ TBUFID tsFILE_open(const u8* name) {
 
     if (utf16->cursize % 2 == 1) {
         TB_system_error = TBSE_INVALID_FILE;
-        return;
+        return 2000000;
     }
     TBUFID id = ts_ensure_free();
     Text_buffer* buf = &(TB_system.buffers[id]);
@@ -574,7 +574,11 @@ void bwindow_buf_insert_text(Buffer_window* w, Wide_string str) {
         TB_system_error = TBSE_OUT_OF_BOUNDS;
         return;
     }
-    tbuffer_insert_string_bypass(&TB_system.buffers[w->buf_id], str.str, str.size);
+    Text_buffer* buf = &TB_system.buffers[w->buf_id];
+    if (IS_FLAG_ON(buf->flags, TB_COMOUTPUT)) { // Make sure the cursor is at the end when inserting text onto the read only console
+        tbuffer_move_cursor(buf, buf->current_chars_stored - buf->bc_current_char);
+    }
+    tbuffer_insert_string_bypass(buf, str.str, str.size);
 }
 
 void bwindow_update(Buffer_window* w, int* cursorx, int* cursory) {
@@ -587,3 +591,46 @@ void bwindow_update(Buffer_window* w, int* cursorx, int* cursory) {
     }
 }
 
+/*
+    FILE BUFFER WINDOW FUNCTIONS
+*/
+
+static struct {
+    List ids;
+    Wide_string_list file_names;
+    Wide_string_list names;
+    TBUFID fbw;
+} FBW_data;
+
+void fbw_start(TBUFID fbw) {
+    list_init(&FBW_data.ids, 100);
+    wstrlist_init(&FBW_data.file_names, 100);
+    wstrlist_init(&FBW_data.names, 100);
+    FBW_data.fbw = fbw;
+}
+
+void fbw_shutdown() {
+    free(FBW_data.names.data);
+    free(FBW_data.names.locations);
+    free(FBW_data.file_names.data);
+    free(FBW_data.file_names.locations);
+    free(FBW_data.ids.data);
+    free(FBW_data.ids.locations);
+}
+
+u32 fbw_add_entry(TBUFID newbufid, const wchar_t* name, u32 namesz) {
+    wstrlist_add(&FBW_data.file_names, name, namesz);
+    wstrlist_add(&FBW_data.names, name, namesz); // TODO: Make this only the file name, not the whole path
+    list_add(&FBW_data.ids, &newbufid, sizeof(TBUFID));
+
+    Text_buffer* buf = &TB_system.buffers[FBW_data.fbw];
+
+    // Insert the string in the correct buffer
+    u32 newnamesz = 0;
+    wchar_t* label = wstrcat(name, L"\n", namesz, 2, &newnamesz);
+    tbuffer_move_cursor(buf, buf->current_chars_stored - buf->bc_current_char);
+    tbuffer_insert_string_bypass(&TB_system.buffers[FBW_data.fbw], label, (int)newnamesz); // TODO: Make all functions that work with strings have u32 as size please
+    free(label);
+
+    return FBW_data.ids.item_count;
+}

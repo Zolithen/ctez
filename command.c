@@ -10,7 +10,6 @@
 
 Wide_string_list* command_parse(wchar_t* com, int coml) {
     Wide_string_list* ret = ecalloc(1, sizeof(Wide_string_list));
-    printf("parsing '%S', size %d\n", com, coml);
 
     int argc = 0;
 
@@ -47,7 +46,7 @@ Wide_string_list* command_parse(wchar_t* com, int coml) {
 }
 
 Command_response command_execute(Wide_string_list* com) {
-    wstrlist_debug_print(com);
+    //wstrlist_debug_print(com);
     Command_response resp = { 0 };
     if (com->item_count >= 1) {
         Wide_string command = wstrlist_get(com, 0);
@@ -59,7 +58,7 @@ Command_response command_execute(Wide_string_list* com) {
                 resp.resp = COMRESP_NEEDARGS;
                 return resp;
             }
-            Wide_string bufstr = wstrlist_get(com, 2);
+            //Wide_string bufstr = wstrlist_get(com, 2);
             u8* resstr = wstrdgr(file_name.str, file_name.size);
             TBUFID id = tsFILE_open(resstr);
             if (TB_system_error != TBSE_OK) {
@@ -88,14 +87,11 @@ Command_response command_execute(Wide_string_list* com) {
             free(resstr);
 
             int chosen_buffer = TWIN1;
-            if (bufstr.str != NULL) {
-
-            }
             ts_free_buffer(bwindows[chosen_buffer]->buf_id);
             bwindows[chosen_buffer]->buf_id = id;
             bwindow_buf_set_flags_on(bwindows[chosen_buffer], TB_UPDATED);
 
-
+            fbw_add_entry(id, file_name.str, file_name.size);
 
         } else {
             resp.resp = COMRESP_INVALID;

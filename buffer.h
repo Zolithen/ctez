@@ -17,7 +17,7 @@ A text like abcd|efg where | is the cursor may be stored in these buffers like:
 before_cursor = abcd···
 after_cursor  = ····efg
                    p*/
-typedef struct {
+typedef struct { // TODO: Make this into an actual "gap buffer" (basically the optimized version of this)
     wchar_t* before_cursor;
     wchar_t* after_cursor;
     int b_size;
@@ -42,7 +42,8 @@ typedef enum {
     TB_UPDATED = 1,
     TB_WRITTABLE = 2,
     TB_ENDSCROLL = 4, // Should the cursor be in the end of the buffer window or in the middle
-    TB_COMLINE = 8
+    TB_COMLINE = 8,
+    TB_COMOUTPUT = 16
 } Text_buffer_flags;
 
 /* Initializers */
@@ -115,7 +116,8 @@ typedef struct {
 Buffer_window** bwindows;
 
 typedef enum {
-    BW_VISIBLE = 1
+    BW_VISIBLE = 1,
+    BW_FILE = 2 // Is this buffer window the one for files?
 } Buffer_window_flags;
 
 Buffer_window* bwindow_create();
@@ -125,5 +127,20 @@ void bwindow_buf_set_flags_on(Buffer_window* w, u8 flags);
 void bwindow_buf_set_flags_off(Buffer_window* w, u8 flags);
 void bwindow_buf_insert_text(Buffer_window* w, Wide_string str);
 void bwindow_update(Buffer_window* w, int* cursorx, int* cursory);
+
+
+/*
+    File buffer window functions
+*/
+
+typedef struct {
+    Wide_string label;
+    Wide_string file_name;
+    TBUFID id;
+} FBW_entry;
+
+void fbw_start(TBUFID fbw);
+void fbw_shutdown();
+u32 fbw_add_entry(TBUFID buf, const wchar_t* name, u32 namesz); /* Adds an entry into the file buffer window */
 
 #endif // BUFFER_H_INCLUDED

@@ -10,6 +10,7 @@
 #include "types.h"
 #include "strlist.h"
 #include "command.h"
+#include "list.h"
 
 #include <windows.h> // Used for platform_sleep
 #define BOTTOM_SECTION_HEIGHT 12
@@ -44,17 +45,24 @@ int start_display() {
 void show_bottom_of_screen(Buffer_window** wins, int winh, int winw) {
     wins[TWINCOM]->flags |= BW_VISIBLE;
     delwin(wins[TWINCOM]->curses_window);
+    wins[TWINFILE]->flags |= BW_VISIBLE;
+    delwin(wins[TWINFILE]->curses_window);
 
     if (winw % 2 == 0) {
         wins[TWINCOM]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 3, winw/2 - 1, winh - BOTTOM_SECTION_HEIGHT + 1, 0);
+        wins[TWINFILE]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 1, winw/2 - 1, winh - BOTTOM_SECTION_HEIGHT + 1, winw/2 + 1);
         wins[TWINCOMINPUT]->curses_window = newwin(1, winw/2 - 1, winh - 1, 0);
     } else {
         wins[TWINCOM]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 3, (int)floor(winw/2), winh - BOTTOM_SECTION_HEIGHT + 1, 0);
+        wins[TWINFILE]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 1, (int)floor(winw/2), winh - BOTTOM_SECTION_HEIGHT + 1, floor(winw/2) + 1);
         wins[TWINCOMINPUT]->curses_window = newwin(1, (int)floor(winw/2), winh - 1, 0);
     }
 
-    bwindow_buf_set_flags_on(wins[TWINCOM], TB_UPDATED | TB_ENDSCROLL);
+    bwindow_buf_set_flags_on(wins[TWINCOM], TB_UPDATED | TB_ENDSCROLL | TB_COMOUTPUT);
     bwindow_buf_set_flags_off(wins[TWINCOM], TB_WRITTABLE);
+
+    bwindow_buf_set_flags_on(wins[TWINFILE], TB_UPDATED | TB_ENDSCROLL);
+    bwindow_buf_set_flags_off(wins[TWINFILE], TB_WRITTABLE);
 
     bwindow_buf_set_flags_on(wins[TWINCOMINPUT], TB_COMLINE);
 
@@ -131,9 +139,9 @@ int main() {
     bwindows = ecalloc(MAX_WINDOWS, sizeof(Buffer_window*));
 
     // Setup layouts
-    //int editor_layout = 0; // 0 is monolithic, 1 is double & 2 is four
+    int editor_layout = 1; // 0 is monolithic, 1 is double & 2 is four
 
-    for (int i = TWIN4; i < MAX_WINDOWS; i++) {
+    for (int i = 0; i < MAX_WINDOWS; i++) {
         bwindows[i] = bwindow_create();
         bwindows[i]->curses_window = newwin(1, 1, 0, 0);
     }
@@ -147,6 +155,8 @@ int main() {
     int selected_window = TWIN1;
     int last_selected_window = TWIN1;
     getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
+
+    fbw_start(bwindows[TWINFILE]->buf_id);
 
     /*Wide_string_list* test = command_parse(L"open \"D:/c/proj/ctez\"", 22); // with terminator
     wstrlist_debug_print(test);
@@ -174,10 +184,20 @@ int main() {
 
             refresh();
         } else if (keypress == KEY_F(1)) {
-            if (selected_window == TWIN1) selected_window = TWINCOMINPUT;
-            else selected_window = TWIN1;
+            selected_window++;
+            if (selected_window >= MAX_WINDOWS) selected_window = 0;
+            if (editor_layout == 0) {
+                if ((selected_window == TWIN2)
+                 || (selected_window == TWIN3)
+                 || (selected_window == TWIN4)) selected_window = TWIN1;
+            } else if (editor_layout == 1) {
+                if ((selected_window == TWIN3)
+                 || (selected_window == TWIN4)) selected_window = TWIN2;
+            }
             getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
             bwindow_buf_set_flags_on(bwindows[selected_window], TB_UPDATED);
+        } else if (keypress == KEY_F(2)) {
+
         }
 
         //mvprintw(winh-1, 0, "");
@@ -196,6 +216,7 @@ int main() {
     }
 
     ts_shutdown();
+    fbw_shutdown();
     endwin();
     return 0;
 }
