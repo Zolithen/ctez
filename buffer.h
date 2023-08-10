@@ -54,6 +54,7 @@ Text_buffer* tbuffer_from_databuffer(Data_buffer* dat); /* Creates a Text_buffer
 bool tbuffer_insert(Text_buffer* buf, wchar_t c); /* Types a character where the cursor is */
 bool tbuffer_insert_string_bypass(Text_buffer* buf, wchar_t* str, int sz); /* Bypasses writtable tag */
 int tbuffer_move_cursor(Text_buffer* buf, int amount); /* Moves the cursor amount characters backwards(negative amount) or forwards (positive amount)*/
+void tbuffer_clear(Text_buffer* buf); /* Sets the whole buffer to 0s */
 
 /* Necessary memory management */
 void tbuffer_resize(Text_buffer* buf); /* Doubles the storage available in the buffer */

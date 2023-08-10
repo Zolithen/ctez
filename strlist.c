@@ -43,7 +43,7 @@ void wstrlist_add_and_terminator(Wide_string_list* l, wchar_t* str, int sz) {
 
 Wide_string wstrlist_get(Wide_string_list* l, int pos) {
     Wide_string ret = { 0 };
-    if (pos > l->item_count) return ret;
+    if (pos >= l->item_count) return ret;
     if (pos == 0) ret.size = l->locations[pos+1];
     else ret.size = l->locations[pos+1] - l->locations[pos];
     ret.str = l->data + l->locations[pos];

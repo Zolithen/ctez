@@ -116,22 +116,6 @@ void show_double_layout(Buffer_window** wins, int winh, int winw) {
 
 int main() {
 
-    // low byte is left, high byte is right (low byte is index divisible by 2)
-    /*wchar_t* p = emalloc(3*sizeof(wchar_t));
-    p[0] = 'w';
-    p[1] = 'a';
-    p[2] = '\0';
-    u8* test = wstrdgr(p, 3);
-    printf("%s\n", test);
-    free(p);
-    free(test);*/
-
-    /*wchar_t* p = L"HOLA";
-    wchar_t* p1 = L" MUNDO";
-    wchar_t* t = wstrcat(p, p1, 5, 7);
-    printf("%S\n", t);
-    free(t);*/
-
     // Start up curses
     if (start_display() == -1) return -1;
     int winh, winw;
@@ -141,6 +125,7 @@ int main() {
 
     ts_start();
     TB_system_error = TBSE_OK;
+    command_msg_setup_defaults();
 
     // Structs
     bwindows = ecalloc(MAX_WINDOWS, sizeof(Buffer_window*));
@@ -160,50 +145,23 @@ int main() {
     show_double_layout(bwindows, winh, winw);
 
     int selected_window = TWIN1;
+    int last_selected_window = TWIN1;
     getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
 
     /*Wide_string_list* test = command_parse(L"open \"D:/c/proj/ctez\"", 22); // with terminator
     wstrlist_debug_print(test);
     wstrlist_free(test);*/
 
-    /*wchar_t* t = ecalloc(3, sizeof(wchar_t));
-    t[0] = 'h';
-    t[1] = 'o';
-    t[2] = 'l';
-    Wide_string_list* test = wstrlist_new(4);
-    wstrlist_add_and_terminator(test, t, 3);
-    free(t);
-    t = ecalloc(9, sizeof(wchar_t));
-    t[0] = 't';
-    t[1] = 'e';
-    t[2] = 's';
-    t[3] = 't';
-    t[4] = ' ';
-    t[5] = 's';
-    t[6] = 't';
-    t[7] = 'r';
-    wstrlist_add(test, t, 9);
-    free(t);
-    t = ecalloc(4, sizeof(wchar_t));
-    t[0] = 't';
-    t[1] = 'o';
-    t[2] = 'n';
-    t[3] = 't';
-    wstrlist_add_and_terminator(test, t, 4);
-    Wide_string w1 = wstrlist_get(test, 0);
-    Wide_string w2 = wstrlist_get(test, 1);
-    Wide_string w3 = wstrlist_get(test, 2);
-    free(t);
-    wstrlist_debug_print(test);
-    wstrlist_free(test);*/
-
     refresh();
     bool is_running = true;
     while (is_running) {
-        platform_sleep(1);
+        platform_sleep(5);
 
         Buffer_window* curwin = bwindows[selected_window];
         int keypress = getch();
+        /*if (keypress != -1) {
+            printf("%d\n", keypress);
+        }*/
 
         if (keypress == 27) {
             is_running = false;

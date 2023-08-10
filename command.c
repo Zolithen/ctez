@@ -47,18 +47,21 @@ Wide_string_list* command_parse(wchar_t* com, int coml) {
 }
 
 Command_response command_execute(Wide_string_list* com) {
+    wstrlist_debug_print(com);
     Command_response resp = { 0 };
     if (com->item_count >= 1) {
         Wide_string command = wstrlist_get(com, 0);
         if (wstrcmp(command.str, L"open", command.size, 5)) {
+
+
             Wide_string file_name = wstrlist_get(com, 1);
             if (file_name.str == NULL) {
                 resp.resp = COMRESP_NEEDARGS;
                 return resp;
             }
-            Wide_string buf = wstrlist_get(com, 2);
+            Wide_string bufstr = wstrlist_get(com, 2);
             u8* resstr = wstrdgr(file_name.str, file_name.size);
-            TBUFID id = tsFILE_open(resstr); // TODO: turn this wstr to a normal str so that the function actually works
+            TBUFID id = tsFILE_open(resstr);
             if (TB_system_error != TBSE_OK) {
                 if (TB_system_error == TBSE_FILE_NOT_FOUND) {
 
@@ -74,26 +77,41 @@ Command_response command_execute(Wide_string_list* com) {
                 }
                 if (TB_system_error == TBSE_INVALID_FILE) {
                     Wide_string msg = { 0 };
-                    msg.str = L"File invalid";
-                    msg.size = 13;
+                    msg.str = L"File invalid\n";
+                    msg.size = 14;
                     bwindow_buf_insert_text(bwindows[TWINCOM], msg);
                 }
                 TB_system_error = TBSE_OK;
+                free(resstr);
                 return resp;
             }
             free(resstr);
 
-            ts_free_buffer(bwindows[TWIN1]->buf_id);
-            bwindows[TWIN1]->buf_id = id;
-            bwindow_buf_set_flags_on(bwindows[TWIN1], TB_UPDATED);
+            int chosen_buffer = TWIN1;
+            if (bufstr.str != NULL) {
 
-            //FILE* f = fopen(name, "r+");
+            }
+            ts_free_buffer(bwindows[chosen_buffer]->buf_id);
+            bwindows[chosen_buffer]->buf_id = id;
+            bwindow_buf_set_flags_on(bwindows[chosen_buffer], TB_UPDATED);
+
+
+
+        } else {
+            resp.resp = COMRESP_INVALID;
         }
     } else {
-        resp.resp = COMRESP_INVALID;
         //resp.msg.str = L"No command given";
     }
 
 
     return resp;
+}
+
+void command_msg_setup_defaults() {
+    COMMAND_MSG_NEEDARGS.str = L"Not enough arguments\n";
+    COMMAND_MSG_NEEDARGS.size = 22;
+
+    COMMAND_MSG_INVALID.str = L"Invalid command\n";
+    COMMAND_MSG_INVALID.size = 17;
 }

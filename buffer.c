@@ -132,6 +132,16 @@ int tbuffer_move_cursor(Text_buffer* buf, int amount) {
     return 0;
 }
 
+void tbuffer_clear(Text_buffer* buf) {
+    memset(buf->before_cursor, 0, buf->b_size*sizeof(wchar_t));
+    memset(buf->after_cursor, 0, buf->b_size*sizeof(wchar_t));
+    buf->current_chars_stored = 0;
+    buf->bc_current_char = 0;
+    buf->ac_current_char = buf->b_size;
+
+    buf->flags |= TB_UPDATED;
+}
+
 /* We start iterating over chars that are near the cursor, so we find line breaks and
    get the amount of chars between them so we can render lines correctly */
 void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx) {
@@ -230,7 +240,7 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
     // Render everything
     int centerx, centery; // We save centery just in case
     werase(win);
-    int wrap_line_offset = 0; //
+    int wrap_line_offset = 0; //TODO: please make an actual solution
     for (int i = 0; i < winh; i++) {
         /*if (lines_hasinit[i]) {
             wmove(win, i, 0);
@@ -392,6 +402,7 @@ TBUFID tsFILE_new() {
 }
 
 TBUFID tsFILE_open(const u8* name) {
+    printf("opening '%s'\n", name);
     FILE* f = fopen((char*)name, "r");
     if (f == NULL) {
         TB_system_error = TBSE_FILE_NOT_FOUND;
@@ -471,6 +482,12 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
         if (is_comline) {
             Wide_string_list* com = command_parse(buf->before_cursor, buf->current_chars_stored+1); // TODO: enter in the middle of a command the command gets executed
             Command_response resp = command_execute(com);
+            if (resp.resp == COMRESP_NEEDARGS) {
+                bwindow_buf_insert_text(bwindows[TWINCOM], COMMAND_MSG_NEEDARGS);
+            } else if (resp.resp == COMRESP_INVALID) {
+                bwindow_buf_insert_text(bwindows[TWINCOM], COMMAND_MSG_INVALID);
+            }
+            tbuffer_clear(buf);
             free(com);
         }
         else tbuffer_insert(buf, '\n');

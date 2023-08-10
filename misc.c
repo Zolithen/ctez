@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <math.h>
 
 void* debug_calloc(size_t n, size_t size, const char* name, int line) {
     void* res = calloc(n, size);
@@ -91,6 +92,23 @@ wchar_t* wstrcat(const wchar_t* first, const wchar_t* second, int szfirst, int s
     memcpy(res+szfirst - 1, second, szsecond*sizeof(wchar_t));
     if (ressize != NULL) *ressize = szfirst + szsecond - 1;
     return res;
+}
+
+bool wstrisnum(const wchar_t* str, int sz) {
+    for (int i = 0; i < sz - 1; i++) {
+        if ((str[i] < '0') || (str[i] > '9')) return false;
+    }
+    return true;
+}
+
+int wstrtonum(const wchar_t* str, int sz) {
+    int acum = 0;
+    int power = 0;
+    for (int i = sz - 2; i >= 0; i--) {
+        acum += (str[i] - '0')*pow(10, power);
+        power++;
+    }
+    return acum;
 }
 
 bool wstrcmp(const wchar_t* first, const wchar_t* second, int szfirst, int szsecond) {
