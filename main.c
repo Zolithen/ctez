@@ -171,14 +171,14 @@ int main() {
     // Setup layouts
     int editor_layout = 0; // 0 is monolithic, 1 is double & 2 is four
 
+    bwindows[TWINCOM] = bwindow_create();
+    bwindows[TWINFILE] = bwindow_create();
+    bwindows[TWINCOMINPUT] = bwindow_create();
+
     for (int i = TWIN4; i < MAX_WINDOWS; i++) {
         bwindows[i] = bwindow_create();
         bwindows[i]->curses_window = newwin(1, 1, 0, 0);
     }
-
-    bwindows[TWINCOM] = bwindow_create();
-    bwindows[TWINFILE] = bwindow_create();
-    bwindows[TWINCOMINPUT] = bwindow_create();
 
     show_layout(editor_layout, winh, winw);
 

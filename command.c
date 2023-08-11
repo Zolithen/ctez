@@ -9,7 +9,7 @@
 #include <stdio.h>
 
 Wide_string_list* command_parse(wchar_t* com, int coml) {
-    Wide_string_list* ret = ecalloc(1, sizeof(Wide_string_list));
+    Wide_string_list* ret = wstrlist_new(25);
 
     int argc = 0;
 
@@ -45,6 +45,10 @@ Wide_string_list* command_parse(wchar_t* com, int coml) {
 
 }
 
+/*
+open <file>
+bound <window number> <buffer id>
+*/
 Command_response command_execute(Wide_string_list* com) {
     //wstrlist_debug_print(com);
     Command_response resp = { 0 };
@@ -58,28 +62,12 @@ Command_response command_execute(Wide_string_list* com) {
                 resp.resp = COMRESP_NEEDARGS;
                 return resp;
             }
-            //Wide_string bufstr = wstrlist_get(com, 2);
+
             u8* resstr = wstrdgr(file_name.str, file_name.size);
             TBUFID id = tsFILE_open(resstr);
             if (TB_system_error != TBSE_OK) {
-                if (TB_system_error == TBSE_FILE_NOT_FOUND) {
-
-                    Wide_string msg = { 0 };
-                    int s1_size = 0;
-                    wchar_t* s1 = wstrcat(L"File not found ", file_name.str, 16, file_name.size, &s1_size);
-                    msg.str = wstrcat(s1, L"\n", s1_size, 2, NULL);
-                    msg.size = s1_size + 1;
-
-                    bwindow_buf_insert_text(bwindows[TWINCOM], msg);
-                    free(msg.str);
-                    free(s1);
-                }
-                if (TB_system_error == TBSE_INVALID_FILE) {
-                    Wide_string msg = { 0 };
-                    msg.str = L"File invalid\n";
-                    msg.size = 14;
-                    bwindow_buf_insert_text(bwindows[TWINCOM], msg);
-                }
+                comerror_file_not_found(&file_name);
+                comerror_file_invalid();
                 TB_system_error = TBSE_OK;
                 free(resstr);
                 return resp;
@@ -94,8 +82,25 @@ Command_response command_execute(Wide_string_list* com) {
 
 
 
-        } else if (wstrcmp(command.str, L"bound", command.size, 6)) {
+        } else if (wstrcmp(command.str, L"bound", command.size, 6)) { // TODO: consider making an alternative version that only takes the window ID (more intuitive)
+            Wide_string _winid = wstrlist_get(com, 1);
+            Wide_string _bufid = wstrlist_get(com, 2);
 
+            if ((_winid.str == NULL) || (_bufid.str == NULL)) {
+                bwindow_buf_insert_text(bwindows[TWINCOM], COMMAND_MSG_NEEDARGS);
+                return resp;
+            }
+
+            if ((wstrisnum(_winid.str, _winid.size)) && (wstrisnum(_bufid.str, _bufid.size))) {
+                int winid = wstrtonum(_winid.str, _winid.size);
+                int bufid = wstrtonum(_bufid.str, _bufid.size);
+
+
+
+            } else {
+                bwindow_buf_insert_text(bwindows[TWINCOM], COMMAND_MSG_INVALID_ARGTYPE);
+                return resp;
+            }
         } else {
             resp.resp = COMRESP_INVALID;
         }
@@ -113,4 +118,30 @@ void command_msg_setup_defaults() {
 
     COMMAND_MSG_INVALID.str = L"Invalid command\n";
     COMMAND_MSG_INVALID.size = 17;
+
+    COMMAND_MSG_INVALID_ARGTYPE.str = L"Invalid argument type\n";
+    COMMAND_MSG_INVALID_ARGTYPE.size = 23;
+}
+
+void comerror_file_not_found(Wide_string* file_name) {
+    if (TB_system_error == TBSE_FILE_NOT_FOUND) {
+        Wide_string msg = { 0 };
+        int s1_size = 0;
+        wchar_t* s1 = wstrcat(L"File not found ", file_name->str, 16, file_name->size, &s1_size);
+        msg.str = wstrcat(s1, L"\n", s1_size, 2, NULL);
+        msg.size = s1_size + 1;
+
+        bwindow_buf_insert_text(bwindows[TWINCOM], msg);
+        free(msg.str);
+        free(s1);
+    }
+}
+
+void comerror_file_invalid() {
+    if (TB_system_error == TBSE_INVALID_FILE) {
+        Wide_string msg = { 0 };
+        msg.str = L"File invalid\n";
+        msg.size = 14;
+        bwindow_buf_insert_text(bwindows[TWINCOM], msg);
+    }
 }

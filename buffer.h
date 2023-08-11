@@ -73,10 +73,17 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
 
 
 /*
-    Buffer system functions (struct defined in c file to make it private)
+    Buffer system functions
     Allows us to handle multiple files being opened at once, handles all memory stuff of that
     so we don't have 100 mallocs in different places
 */
+
+struct {
+    Text_buffer* buffers;
+    bool* free;
+    u32 current_alloc;
+} TB_system; // Do not do weird memory stuff with this outside of ts functions
+
 typedef enum {
     TBSE_OK,
     TBSE_ALREADY_FREE,

@@ -332,12 +332,6 @@ void tbuffer_free(Text_buffer* buf) {
     BUFFER SYSTEM STUFF
 */
 
-static struct {
-    Text_buffer* buffers;
-    bool* free;
-    u32 current_alloc;
-} TB_system;
-
 void ts_start() {
     TB_system.current_alloc = 3;
     TB_system.buffers = ecalloc(TB_system.current_alloc, sizeof(Text_buffer));
@@ -631,7 +625,7 @@ u32 fbw_add_entry(TBUFID newbufid, const wchar_t* name, u32 namesz) {
 
 
     // Insert the string in the correct buffers
-    // TODO: Use a version of printf to do this please
+    // TODO: Use a version of printf to do this
     int newnamesz = 0;
     int bufidstrlen = 0;
     wchar_t* _label = wstrcat(name, L"\n", namesz, 2, &newnamesz);
