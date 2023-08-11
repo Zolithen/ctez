@@ -86,12 +86,15 @@ Command_response command_execute(Wide_string_list* com) {
             }
             free(resstr);
 
-            int chosen_buffer = TWIN1;
+            /*int chosen_buffer = TWIN1;
             ts_free_buffer(bwindows[chosen_buffer]->buf_id);
             bwindows[chosen_buffer]->buf_id = id;
-            bwindow_buf_set_flags_on(bwindows[chosen_buffer], TB_UPDATED);
-
+            bwindow_buf_set_flags_on(bwindows[chosen_buffer], TB_UPDATED);*/
             fbw_add_entry(id, file_name.str, file_name.size);
+
+
+
+        } else if (wstrcmp(command.str, L"bound", command.size, 6)) {
 
         } else {
             resp.resp = COMRESP_INVALID;

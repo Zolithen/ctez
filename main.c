@@ -85,6 +85,15 @@ void show_monolithic_layout(Buffer_window** wins, int winh, int winw) {
     bwindow_buf_set_flags_on(wins[TWIN1], TB_UPDATED);
 
     show_bottom_of_screen(wins, winh, winw);
+
+    for (int i = winh-BOTTOM_SECTION_HEIGHT; i < winh; i++) {
+        if (winw % 2 == 0) {
+            mvaddch(i, winw/2 - 1, 0x2503);
+            mvaddch(i, winw/2, 0x2503);
+        } else {
+            mvaddch(i, (int)floor(winw/2), 0x2503);
+        }
+    }
 }
 
 void show_double_layout(Buffer_window** wins, int winh, int winw) {
@@ -122,7 +131,28 @@ void show_double_layout(Buffer_window** wins, int winh, int winw) {
     refresh();
 }
 
+void show_layout(int sellayout, int winh, int winw) {
+    if (sellayout == 0) {
+        show_monolithic_layout(bwindows, winh, winw);
+    } else if (sellayout == 1) {
+        show_double_layout(bwindows, winh, winw);
+    } else if (sellayout == 2) {
+
+    }
+}
+
 int main() {
+
+    int_to_wstr_char_array[0] = L'0';
+    int_to_wstr_char_array[1] = L'1';
+    int_to_wstr_char_array[2] = L'2';
+    int_to_wstr_char_array[3] = L'3';
+    int_to_wstr_char_array[4] = L'4';
+    int_to_wstr_char_array[5] = L'5';
+    int_to_wstr_char_array[6] = L'6';
+    int_to_wstr_char_array[7] = L'7';
+    int_to_wstr_char_array[8] = L'8';
+    int_to_wstr_char_array[9] = L'9';
 
     // Start up curses
     if (start_display() == -1) return -1;
@@ -139,9 +169,9 @@ int main() {
     bwindows = ecalloc(MAX_WINDOWS, sizeof(Buffer_window*));
 
     // Setup layouts
-    int editor_layout = 1; // 0 is monolithic, 1 is double & 2 is four
+    int editor_layout = 0; // 0 is monolithic, 1 is double & 2 is four
 
-    for (int i = 0; i < MAX_WINDOWS; i++) {
+    for (int i = TWIN4; i < MAX_WINDOWS; i++) {
         bwindows[i] = bwindow_create();
         bwindows[i]->curses_window = newwin(1, 1, 0, 0);
     }
@@ -150,7 +180,7 @@ int main() {
     bwindows[TWINFILE] = bwindow_create();
     bwindows[TWINCOMINPUT] = bwindow_create();
 
-    show_double_layout(bwindows, winh, winw);
+    show_layout(editor_layout, winh, winw);
 
     int selected_window = TWIN1;
     int last_selected_window = TWIN1;
@@ -179,7 +209,7 @@ int main() {
             resize_term(0, 0);
             getmaxyx(stdscr, winh, winw);
 
-            show_double_layout(bwindows, winh, winw);
+            show_layout(editor_layout, winh, winw);
             getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
 
             refresh();

@@ -365,7 +365,10 @@ void ts_shutdown() {
 // Returns the ID of the uninited buffer
 TBUFID ts_ensure_free() {
     for (u32 i = 0; i < TB_system.current_alloc; i++) {
-        if (TB_system.free[i]) return i;
+        if (TB_system.free[i]) {
+            TB_system.free[i] = false;
+            return i;
+        }
     }
     TB_system.buffers = erealloc(TB_system.buffers, sizeof(Text_buffer)*TB_system.current_alloc*2);
     TB_system.free = erealloc(TB_system.free, sizeof(bool)*TB_system.current_alloc*2);
@@ -375,6 +378,7 @@ TBUFID ts_ensure_free() {
     }
 
     TB_system.current_alloc *= 2;
+    TB_system.free[TB_system.current_alloc/2] = false;
     return TB_system.current_alloc/2;
 }
 
@@ -625,12 +629,22 @@ u32 fbw_add_entry(TBUFID newbufid, const wchar_t* name, u32 namesz) {
 
     Text_buffer* buf = &TB_system.buffers[FBW_data.fbw];
 
-    // Insert the string in the correct buffer
-    u32 newnamesz = 0;
-    wchar_t* label = wstrcat(name, L"\n", namesz, 2, &newnamesz);
+
+    // Insert the string in the correct buffers
+    // TODO: Use a version of printf to do this please
+    int newnamesz = 0;
+    int bufidstrlen = 0;
+    wchar_t* _label = wstrcat(name, L"\n", namesz, 2, &newnamesz);
+    wchar_t* _bufid = wstrfromnum((int)newbufid, &bufidstrlen);
+    wchar_t* _bufidstr = wstrcat(_bufid, L" ", bufidstrlen, 2, &bufidstrlen);
+    wchar_t* label = wstrcat(_bufidstr, _label, bufidstrlen, newnamesz, &newnamesz);
     tbuffer_move_cursor(buf, buf->current_chars_stored - buf->bc_current_char);
-    tbuffer_insert_string_bypass(&TB_system.buffers[FBW_data.fbw], label, (int)newnamesz); // TODO: Make all functions that work with strings have u32 as size please
+    tbuffer_insert_string_bypass(&TB_system.buffers[FBW_data.fbw], label, newnamesz); // TODO: Make all functions that work with strings have u32 as size please
+
     free(label);
+    free(_label);
+    free(_bufid);
+    free(_bufidstr);
 
     return FBW_data.ids.item_count;
 }

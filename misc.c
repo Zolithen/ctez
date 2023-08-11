@@ -111,6 +111,22 @@ int wstrtonum(const wchar_t* str, int sz) {
     return acum;
 }
 
+wchar_t* wstrfromnum(int num, int* ressize) {
+    int sz = ((int) floor(log10(num)) + 1);
+    wchar_t* text = ecalloc(sz + 1, sizeof(wchar_t));
+
+    int prevpower = 1;
+    for (int i = 0; i < sz; i++) {
+        char digit = ((num % (int)pow(10, i + 1)) - (num%prevpower))/(prevpower);
+        text[sz - i - 1] = int_to_wstr_char_array[digit];
+        prevpower = (int) pow(10, i + 1);
+    }
+
+    *ressize = sz + 1;
+
+    return text;
+}
+
 bool wstrcmp(const wchar_t* first, const wchar_t* second, int szfirst, int szsecond) {
     if (szfirst == szsecond) {
         for (int i = 0; i < szfirst; i++) {
