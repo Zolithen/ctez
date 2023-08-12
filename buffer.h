@@ -3,6 +3,9 @@
 
 #include <curses.h>
 #include <stdlib.h>
+
+#include "types.h"
+#include "wstr.h"
 #include "databuffer.h"
 #include "strlist.h"
 

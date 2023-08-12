@@ -1,17 +1,21 @@
-#include "command.h"
-#include "databuffer.h"
-#include "types.h"
-#include "misc.h"
-#include "strlist.h"
-#include "buffer.h"
 #include <string.h>
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "command.h"
+
+#include "types.h"
+#include "misc.h"
+#include "wstr.h"
+#include "databuffer.h"
+#include "strlist.h"
+
+#include "buffer.h"
+
 Wide_string_list* command_parse(wchar_t* com, int coml) {
     Wide_string_list* ret = wstrlist_new(25);
 
-    int argc = 0;
+    //int argc = 0;
 
     int argstart = 0;
     int on_string = false;
@@ -47,7 +51,7 @@ Wide_string_list* command_parse(wchar_t* com, int coml) {
 
 /*
 open <file>
-bound <window number> <buffer id>
+bind <window number> <buffer id>
 */
 Command_response command_execute(Wide_string_list* com) {
     //wstrlist_debug_print(com);
@@ -56,12 +60,8 @@ Command_response command_execute(Wide_string_list* com) {
         Wide_string command = wstrlist_get(com, 0);
         if (wstrcmp(command.str, L"open", command.size, 5)) {
 
-
+            if (comerror_args_expect_exactly(com, 1)) return resp;
             Wide_string file_name = wstrlist_get(com, 1);
-            if (file_name.str == NULL) {
-                resp.resp = COMRESP_NEEDARGS;
-                return resp;
-            }
 
             u8* resstr = wstrdgr(file_name.str, file_name.size);
             TBUFID id = tsFILE_open(resstr);
@@ -80,29 +80,45 @@ Command_response command_execute(Wide_string_list* com) {
             bwindow_buf_set_flags_on(bwindows[chosen_buffer], TB_UPDATED);*/
             fbw_add_entry(id, file_name.str, file_name.size);
 
+        } else if (wstrcmp(command.str, L"bind", command.size, 5)) { // TODO: consider making an alternative version that only takes the window ID (more intuitive)
 
+            if (comerror_args_expect_exactly(com, 2)) return resp;
 
-        } else if (wstrcmp(command.str, L"bound", command.size, 6)) { // TODO: consider making an alternative version that only takes the window ID (more intuitive)
             Wide_string _winid = wstrlist_get(com, 1);
             Wide_string _bufid = wstrlist_get(com, 2);
 
-            if ((_winid.str == NULL) || (_bufid.str == NULL)) {
-                bwindow_buf_insert_text(bwindows[TWINCOM], COMMAND_MSG_NEEDARGS);
-                return resp;
-            }
-
             if ((wstrisnum(_winid.str, _winid.size)) && (wstrisnum(_bufid.str, _bufid.size))) {
-                int winid = wstrtonum(_winid.str, _winid.size);
-                int bufid = wstrtonum(_bufid.str, _bufid.size);
+                u32 winid = wstrtonum(_winid.str, _winid.size);
+                u32 bufid = wstrtonum(_bufid.str, _bufid.size);
 
+                if ( (winid > 4) || ((bufid < 3) || (bufid >= TB_system.current_alloc )) ) {
+                    bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+                    return resp;
+                }
 
-
+                bwindows[TWIN(winid)]->buf_id = bufid;
+                bwindow_buf_set_flags_on(bwindows[TWIN(winid)], TB_UPDATED);
             } else {
-                bwindow_buf_insert_text(bwindows[TWINCOM], COMMAND_MSG_INVALID_ARGTYPE);
+                bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGTYPE);
                 return resp;
             }
+
+            /*
+            if (comerror_args_expect_exactly(com, 2)) return resp;
+            if (comerror_args_type_expect_exactly(com, COMARGTYPE_INT, COMARGTYPE_INT)) return resp;
+            if (comerror_args_range_expect_exactly(com, 0, 5, 2, TB_system.current_alloc + 1)) return resp;
+
+            Wide_string _winid = wstrlist_get(com, 1);
+            Wide_string _bufid = wstrlist_get(com, 2);
+            u32 winid = wstrtonum(_winid.str, _winid.size);
+            u32 bufid = wstrtonum(_bufid.str, _bufid.size);
+            bwindows[TWIN(winid)]->buf_id = bufid;
+            bwindow_buf_set_flags_on(bwindows[TWIN(winid)], TB_UPDATED);
+            */
+
         } else {
-            resp.resp = COMRESP_INVALID;
+            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID);
+            return resp;
         }
     } else {
         //resp.msg.str = L"No command given";
@@ -112,19 +128,23 @@ Command_response command_execute(Wide_string_list* com) {
     return resp;
 }
 
-void command_msg_setup_defaults() {
-    COMMAND_MSG_NEEDARGS.str = L"Not enough arguments\n";
-    COMMAND_MSG_NEEDARGS.size = 22;
-
-    COMMAND_MSG_INVALID.str = L"Invalid command\n";
-    COMMAND_MSG_INVALID.size = 17;
-
-    COMMAND_MSG_INVALID_ARGTYPE.str = L"Invalid argument type\n";
-    COMMAND_MSG_INVALID_ARGTYPE.size = 23;
+bool comerror_args_expect_exactly(Wide_string_list* l, int numargs) {
+    if (l->item_count - 1 != (u32)numargs) {
+        Wide_string msg = { 0 };
+        int chars_to_alloc = _scwprintf(STR_COMMSG_NEED_EXACTARGS.str, numargs) + 1; // _scwprintf doesn't count the terminating char
+        msg.size = chars_to_alloc;
+        msg.str = emalloc(chars_to_alloc * sizeof(wchar_t));
+        _snwprintf_s(msg.str, chars_to_alloc, chars_to_alloc - 1, STR_COMMSG_NEED_EXACTARGS.str, numargs);
+        bwindow_buf_insert_text(bwindows[TWINCOM], msg);
+        free(msg.str);
+        return true;
+    }
+    return false;
 }
 
 void comerror_file_not_found(Wide_string* file_name) {
     if (TB_system_error == TBSE_FILE_NOT_FOUND) {
+        /* File not found <file_name>\n */
         Wide_string msg = { 0 };
         int s1_size = 0;
         wchar_t* s1 = wstrcat(L"File not found ", file_name->str, 16, file_name->size, &s1_size);

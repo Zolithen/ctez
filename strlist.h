@@ -1,15 +1,12 @@
 #ifndef STRLIST_H_INCLUDED
 #define STRLIST_H_INCLUDED
 
-#include "types.h"
 #include <stdlib.h>
 
-// TODO: Change instances of Wide_string_list to just List
-typedef struct {
-    wchar_t* str;
-    u32 size;
-} Wide_string;
+#include "types.h"
+#include "wstr.h"
 
+// TODO: Change instances of Wide_string_list to just List
 typedef struct {
     u32* locations;
     wchar_t* data;

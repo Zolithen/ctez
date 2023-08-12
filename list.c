@@ -1,8 +1,11 @@
-#include "list.h"
-#include "misc.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+#include "list.h"
+
+#include "types.h"
+#include "misc.h"
 
 void list_init(List* l, u32 insize) {
     l->item_count = 0;

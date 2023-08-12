@@ -1,7 +1,9 @@
 #include "databuffer.h"
-#include "misc.h"
+
 #include <stdlib.h>
 #include <string.h>
+
+#include "misc.h"
 
 Data_buffer* databuffer_new(u64 insize) {
     Data_buffer* buf = emalloc(sizeof(Data_buffer));

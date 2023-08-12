@@ -25,6 +25,6 @@ typedef long i64;
 #define TWIN2 MAX_WINDOWS - 2
 #define TWIN3 MAX_WINDOWS - 3
 #define TWIN4 MAX_WINDOWS - 4
-#define TWIN(n) MAX_WINDOWS - n
+#define TWIN(n) MAX_WINDOWS - (n)
 
 #endif // TYPES_H_INCLUDED

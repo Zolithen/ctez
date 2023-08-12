@@ -2,6 +2,9 @@
 #define COMMAND_H_INCLUDED
 
 #include <stdlib.h>
+#include <stdbool.h>
+
+#include "types.h"
 #include "strlist.h"
 
 typedef enum {
@@ -20,12 +23,8 @@ Wide_string_list* command_parse(wchar_t* com, int coml);
 Command_response command_execute(Wide_string_list* com);
 
 // Command messages
-void command_msg_setup_defaults();
+bool comerror_args_expect_exactly(Wide_string_list* l, int numargs);
 void comerror_file_not_found(Wide_string* file_name);
 void comerror_file_invalid();
-
-Wide_string COMMAND_MSG_INVALID;
-Wide_string COMMAND_MSG_NEEDARGS;
-Wide_string COMMAND_MSG_INVALID_ARGTYPE;
 
 #endif // COMMAND_H_INCLUDED

@@ -2,6 +2,7 @@
 #define DATABUFFER_H_INCLUDED
 
 #include <stdlib.h>
+
 #include "types.h"
 
 /* Stores arbitrary data and handles resizing automatically */

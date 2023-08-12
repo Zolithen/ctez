@@ -1,7 +1,9 @@
-#include "strlist.h"
-#include "misc.h"
 #include <string.h>
 #include <stdio.h>
+
+#include "strlist.h"
+
+#include "misc.h"
 
 void wstrlist_init(Wide_string_list* l, u32 insize) {
     l->item_count = 0;

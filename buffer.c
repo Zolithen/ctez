@@ -1,12 +1,17 @@
-#include "buffer.h"
-#include "misc.h"
-#include "command.h"
-#include "list.h"
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
+
+#include "buffer.h"
+
+#include "misc.h"
+#include "wstr.h"
+#include "databuffer.h"
+#include "list.h"
+
+#include "command.h"
 
 void tbuffer_init(Text_buffer* buf, int in_size) {
     buf->b_size = in_size;
@@ -239,7 +244,8 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
     lines_size[center] = (int)floor((c_linebef_size + c_lineaf_size)/winw);
 
     // Render everything
-    int centerx, centery; // We save centery just in case
+    int centerx = 0;
+    int centery = 0; // We save centery just in case
     werase(win);
     int wrap_line_offset = 0; //TODO: please make an actual solution
     for (int i = 0; i < winh; i++) {
@@ -480,11 +486,6 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
         if (is_comline) {
             Wide_string_list* com = command_parse(buf->before_cursor, buf->current_chars_stored+1); // TODO: enter in the middle of a command the command gets executed
             Command_response resp = command_execute(com);
-            if (resp.resp == COMRESP_NEEDARGS) {
-                bwindow_buf_insert_text(bwindows[TWINCOM], COMMAND_MSG_NEEDARGS);
-            } else if (resp.resp == COMRESP_INVALID) {
-                bwindow_buf_insert_text(bwindows[TWINCOM], COMMAND_MSG_INVALID);
-            }
             tbuffer_clear(buf);
             free(com);
         }

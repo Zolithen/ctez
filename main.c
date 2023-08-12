@@ -4,17 +4,19 @@
 #include <ctype.h>
 #include <math.h>
 
-#include "misc.h"
-#include "buffer.h"
-#include "databuffer.h"
 #include "types.h"
-#include "strlist.h"
-#include "command.h"
+#include "misc.h"
+#include "wstr.h"
 #include "list.h"
+#include "databuffer.h"
+#include "strlist.h"
+
+#include "buffer.h"
+#include "command.h"
 
 #include <windows.h> // Used for platform_sleep
-#define BOTTOM_SECTION_HEIGHT 12
 
+#define BOTTOM_SECTION_HEIGHT 12
 
 void platform_sleep(int milisecs) { // You can change this one function to the platform's sleep function (it's not in the C standard)
     Sleep(milisecs); // Windows
@@ -161,9 +163,9 @@ int main() {
     int cursorx, cursory;
     int selwinx, selwiny;
 
+    wstr_start();
     ts_start();
     TB_system_error = TBSE_OK;
-    command_msg_setup_defaults();
 
     // Structs
     bwindows = ecalloc(MAX_WINDOWS, sizeof(Buffer_window*));
@@ -179,6 +181,8 @@ int main() {
         bwindows[i] = bwindow_create();
         bwindows[i]->curses_window = newwin(1, 1, 0, 0);
     }
+
+    //fbw_add_entry(id, file_name.str, file_name.size);
 
     show_layout(editor_layout, winh, winw);
 
