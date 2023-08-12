@@ -19,8 +19,17 @@ typedef struct {
     Wide_string msg;
 } Command_response;
 
+typedef enum {
+    COMARGTYPE_ANY,
+    COMARGTYPE_INT
+} Command_argument_type;
+
 Wide_string_list* command_parse(wchar_t* com, int coml);
-Command_response command_execute(Wide_string_list* com);
+void command_execute(Wide_string_list* com);
+
+// Utilities for command error reporting
+bool comerror_argtype_expect_exactly(Wide_string_list* com, u32 argnum, Command_argument_type argtype);
+bool comerror_argrange_expect_exactly(Wide_string_list* com, u32 argnum, int minimum, int maximum); /* We expect the argument to be already an integer */
 
 // Command messages
 bool comerror_args_expect_exactly(Wide_string_list* l, int numargs);

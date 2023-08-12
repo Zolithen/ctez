@@ -27,6 +27,7 @@ typedef struct { // TODO: Make this into an actual "gap buffer" (basically the o
     int bc_current_char;
     int ac_current_char;
     int current_chars_stored;
+    Narrow_string linked_file_path;
     u8 flags;
 } Text_buffer;
 
@@ -104,7 +105,7 @@ void ts_shutdown();
 void ts_free_buffer(TBUFID id);
 TBUFID ts_ensure_free();
 TBUFID tsFILE_new();
-TBUFID tsFILE_open(const u8* name);
+TBUFID tsFILE_open(const u8* name, u32 name_size);
 bool tsFILE_save(TBUFID buf, const char* name);
 void tsFILE_close(TBUFID buf);
 
@@ -151,6 +152,6 @@ typedef struct {
 
 void fbw_start(TBUFID fbw);
 void fbw_shutdown();
-u32 fbw_add_entry(TBUFID buf, const wchar_t* name, u32 namesz); /* Adds an entry into the file buffer window */
+u32 fbw_add_entry(TBUFID newbufid, const wchar_t* path, u32 pathsz); /* Adds an entry into the file buffer window */
 
 #endif // BUFFER_H_INCLUDED

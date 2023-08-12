@@ -21,6 +21,8 @@ void tbuffer_init(Text_buffer* buf, int in_size) {
     buf->bc_current_char = 0;
     buf->current_chars_stored = 0;
     buf->flags = TB_WRITTABLE;
+    buf->linked_file_path.size = 0;
+    buf->linked_file_path.str = NULL;
 }
 
 Text_buffer* tbuffer_create(int in_size) {
@@ -406,7 +408,7 @@ TBUFID tsFILE_new() {
     return id;
 }
 
-TBUFID tsFILE_open(const u8* name) {
+TBUFID tsFILE_open(const u8* name, u32 name_size) {
     FILE* f = fopen((char*)name, "r");
     if (f == NULL) {
         TB_system_error = TBSE_FILE_NOT_FOUND;
@@ -436,7 +438,10 @@ TBUFID tsFILE_open(const u8* name) {
     buf->bc_current_char = buf->b_size - 1;
     buf->current_chars_stored = buf->b_size - 1;
     buf->flags = TB_WRITTABLE | TB_UPDATED;
+    buf->linked_file_path.str = ecalloc(name_size, sizeof(u8));
+    buf->linked_file_path.size = name_size;
 
+    memcpy(buf->linked_file_path.str, name, sizeof(u8)*name_size);
     memcpy(buf->before_cursor, utf16->data, sizeof(wchar_t)*(buf->b_size - 1));
     databuffer_free(utf16);
     databuffer_free(dat);
@@ -485,7 +490,7 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
     case PADENTER:
         if (is_comline) {
             Wide_string_list* com = command_parse(buf->before_cursor, buf->current_chars_stored+1); // TODO: enter in the middle of a command the command gets executed
-            Command_response resp = command_execute(com);
+            command_execute(com);
             tbuffer_clear(buf);
             free(com);
         }
@@ -617,25 +622,28 @@ void fbw_shutdown() {
     free(FBW_data.ids.locations);
 }
 
-u32 fbw_add_entry(TBUFID newbufid, const wchar_t* name, u32 namesz) {
-    wstrlist_add(&FBW_data.file_names, name, namesz);
-    wstrlist_add(&FBW_data.names, name, namesz); // TODO: Make this only the file name, not the whole path
+u32 fbw_add_entry(TBUFID newbufid, const wchar_t* path, u32 pathsz) {
+    u32 file_name_size = 0;
+    wchar_t* file_name = wstrfilefrompath(path, pathsz, &file_name_size);
+
+    wstrlist_add(&FBW_data.file_names, path, pathsz);
+    wstrlist_add(&FBW_data.names, file_name, file_name_size); // TODO: Make this only the file name, not the whole path
     list_add(&FBW_data.ids, &newbufid, sizeof(TBUFID));
 
     Text_buffer* buf = &TB_system.buffers[FBW_data.fbw];
 
-
     // Insert the string in the correct buffers
     // TODO: Use a version of printf to do this
-    int newnamesz = 0;
-    int bufidstrlen = 0;
-    wchar_t* _label = wstrcat(name, L"\n", namesz, 2, &newnamesz);
-    wchar_t* _bufid = wstrfromnum((int)newbufid, &bufidstrlen);
+    u32 newnamesz = 0;
+    u32 bufidstrlen = 0;
+    wchar_t* _label = wstrcat(file_name, L"\n", file_name_size, 2, &newnamesz);
+    wchar_t* _bufid = wstrfromnum(newbufid, &bufidstrlen);
     wchar_t* _bufidstr = wstrcat(_bufid, L" ", bufidstrlen, 2, &bufidstrlen);
     wchar_t* label = wstrcat(_bufidstr, _label, bufidstrlen, newnamesz, &newnamesz);
     tbuffer_move_cursor(buf, buf->current_chars_stored - buf->bc_current_char);
-    tbuffer_insert_string_bypass(&TB_system.buffers[FBW_data.fbw], label, newnamesz); // TODO: Make all functions that work with strings have u32 as size please
+    tbuffer_insert_string_bypass(&TB_system.buffers[FBW_data.fbw], label, newnamesz);
 
+    free(file_name);
     free(label);
     free(_label);
     free(_bufid);

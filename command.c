@@ -52,27 +52,34 @@ Wide_string_list* command_parse(wchar_t* com, int coml) {
 /*
 open <file>
 bind <window number> <buffer id>
+new
+
+getpath <buffer id>
+save <buffer id>
+saveall
+filebind <file path> <buffer id>
+
+setprojectdir <dir path> Still not sure how to handle this
+cd <path>
 */
-Command_response command_execute(Wide_string_list* com) {
+void command_execute(Wide_string_list* com) {
     //wstrlist_debug_print(com);
-    Command_response resp = { 0 };
     if (com->item_count >= 1) {
         Wide_string command = wstrlist_get(com, 0);
         if (wstrcmp(command.str, L"open", command.size, 5)) {
 
-            if (comerror_args_expect_exactly(com, 1)) return resp;
+            if (comerror_args_expect_exactly(com, 1)) return;
             Wide_string file_name = wstrlist_get(com, 1);
 
             u8* resstr = wstrdgr(file_name.str, file_name.size);
-            TBUFID id = tsFILE_open(resstr);
+            TBUFID id = tsFILE_open(resstr, file_name.size);
+            free(resstr);
             if (TB_system_error != TBSE_OK) {
                 comerror_file_not_found(&file_name);
                 comerror_file_invalid();
                 TB_system_error = TBSE_OK;
-                free(resstr);
-                return resp;
+                return;
             }
-            free(resstr);
 
             /*int chosen_buffer = TWIN1;
             ts_free_buffer(bwindows[chosen_buffer]->buf_id);
@@ -82,7 +89,7 @@ Command_response command_execute(Wide_string_list* com) {
 
         } else if (wstrcmp(command.str, L"bind", command.size, 5)) { // TODO: consider making an alternative version that only takes the window ID (more intuitive)
 
-            if (comerror_args_expect_exactly(com, 2)) return resp;
+            if (comerror_args_expect_exactly(com, 2)) return;
 
             Wide_string _winid = wstrlist_get(com, 1);
             Wide_string _bufid = wstrlist_get(com, 2);
@@ -91,22 +98,24 @@ Command_response command_execute(Wide_string_list* com) {
                 u32 winid = wstrtonum(_winid.str, _winid.size);
                 u32 bufid = wstrtonum(_bufid.str, _bufid.size);
 
-                if ( (winid > 4) || ((bufid < 3) || (bufid >= TB_system.current_alloc )) ) {
+                if ( (winid > 4) || ((bufid < NUMBER_OF_SYSTEM_WINDOWS) || (bufid >= TB_system.current_alloc )) ) {
                     bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
-                    return resp;
+                    return;
                 }
 
                 bwindows[TWIN(winid)]->buf_id = bufid;
                 bwindow_buf_set_flags_on(bwindows[TWIN(winid)], TB_UPDATED);
             } else {
                 bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGTYPE);
-                return resp;
+                return;
             }
 
             /*
-            if (comerror_args_expect_exactly(com, 2)) return resp;
-            if (comerror_args_type_expect_exactly(com, COMARGTYPE_INT, COMARGTYPE_INT)) return resp;
-            if (comerror_args_range_expect_exactly(com, 0, 5, 2, TB_system.current_alloc + 1)) return resp;
+            if (comerror_args_expect_exactly(com, 2)) return;
+            if (comerror_argtype_expect_exactly(com, 1, COMARGTYPE_INT)) return;
+            if (comerror_argtype_expect_exactly(com, 2, COMARGTYPE_INT)) return;
+            if (comerror_argrange_expect_exactly(com, 1, 1, 4)) return;
+            if (comerror_argrange_expect_exactly(com, 2, NUMBER_OF_SYSTEM_WINDOWS, TB_system.current_alloc)) return;
 
             Wide_string _winid = wstrlist_get(com, 1);
             Wide_string _bufid = wstrlist_get(com, 2);
@@ -116,16 +125,40 @@ Command_response command_execute(Wide_string_list* com) {
             bwindow_buf_set_flags_on(bwindows[TWIN(winid)], TB_UPDATED);
             */
 
+        } else if (wstrcmp(command.str, L"new", command.size, 4)) {
+
+            TBUFID id = tsFILE_new();
+            fbw_add_entry(id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
+
+        } else if (wstrcmp(command.str, L"save", command.size, 5)) {
+
+            if (comerror_args_expect_exactly(com, 1)) return;
+            Wide_string _bufid = wstrlist_get(com, 1);
+
+            if (wstrisnum(_bufid.str, _bufid.size)) {
+                u32 bufid = wstrtonum(_bufid.str, _bufid.size);
+
+                if ( (bufid < NUMBER_OF_SYSTEM_WINDOWS) || (bufid >= TB_system.current_alloc) ) {
+                    bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+                    return;
+                }
+
+                // TODO: Do the actual saving
+            } else {
+                bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGTYPE);
+                return;
+            }
+
         } else {
             bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID);
-            return resp;
+            return;
         }
     } else {
         //resp.msg.str = L"No command given";
     }
 
 
-    return resp;
+    return;
 }
 
 bool comerror_args_expect_exactly(Wide_string_list* l, int numargs) {
@@ -142,11 +175,24 @@ bool comerror_args_expect_exactly(Wide_string_list* l, int numargs) {
     return false;
 }
 
+bool comerror_argtype_expect_exactly(Wide_string_list* com, u32 argnum, Command_argument_type argtype) {
+    if (argtype == COMARGTYPE_INT) { // TODO: This can be made more efficient by cutting the wstrlist_get method and creating a wstrlist_isposnum or something
+        Wide_string temp = wstrlist_get(com, argnum);
+        return wstrisnum(temp.str, temp.size);
+    }
+    return true;
+}
+bool comerror_argrange_expect_exactly(Wide_string_list* com, u32 argnum, int minimum, int maximum) { /* We expect the argument to be already an integer */
+
+    return false
+}
+
+
 void comerror_file_not_found(Wide_string* file_name) {
     if (TB_system_error == TBSE_FILE_NOT_FOUND) {
         /* File not found <file_name>\n */
         Wide_string msg = { 0 };
-        int s1_size = 0;
+        u32 s1_size = 0;
         wchar_t* s1 = wstrcat(L"File not found ", file_name->str, 16, file_name->size, &s1_size);
         msg.str = wstrcat(s1, L"\n", s1_size, 2, NULL);
         msg.size = s1_size + 1;

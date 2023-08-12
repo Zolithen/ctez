@@ -159,9 +159,9 @@ int main() {
     // Start up curses
     if (start_display() == -1) return -1;
     int winh, winw;
-    getmaxyx(stdscr, winh, winw);
     int cursorx, cursory;
     int selwinx, selwiny;
+    getmaxyx(stdscr, winh, winw);
 
     wstr_start();
     ts_start();
@@ -171,7 +171,7 @@ int main() {
     bwindows = ecalloc(MAX_WINDOWS, sizeof(Buffer_window*));
 
     // Setup layouts
-    int editor_layout = 0; // 0 is monolithic, 1 is double & 2 is four
+    int editor_layout = 1; // 0 is monolithic, 1 is double & 2 is four
 
     bwindows[TWINCOM] = bwindow_create();
     bwindows[TWINFILE] = bwindow_create();
@@ -182,8 +182,6 @@ int main() {
         bwindows[i]->curses_window = newwin(1, 1, 0, 0);
     }
 
-    //fbw_add_entry(id, file_name.str, file_name.size);
-
     show_layout(editor_layout, winh, winw);
 
     int selected_window = TWIN1;
@@ -191,6 +189,11 @@ int main() {
     getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
 
     fbw_start(bwindows[TWINFILE]->buf_id);
+
+    fbw_add_entry(bwindows[TWIN4]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
+    fbw_add_entry(bwindows[TWIN3]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
+    fbw_add_entry(bwindows[TWIN2]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
+    fbw_add_entry(bwindows[TWIN1]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
 
     /*Wide_string_list* test = command_parse(L"open \"D:/c/proj/ctez\"", 22); // with terminator
     wstrlist_debug_print(test);

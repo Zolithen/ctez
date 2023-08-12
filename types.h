@@ -18,6 +18,7 @@ typedef long i64;
 // Project specific
 #define BOTTOM_SECTION_HEIGHT 12
 #define MAX_WINDOWS 7
+#define NUMBER_OF_SYSTEM_WINDOWS 3
 #define TWINCOM 0
 #define TWINCOMINPUT 1
 #define TWINFILE 2
