@@ -245,6 +245,7 @@ int main() {
 
         bwindow_handle_keypress(curwin, keypress);
         for (int i = 0; i < MAX_WINDOWS; i++) {
+            // TODO: Do not update windows that are outside the selected_layout
             bwindow_update(bwindows[i], &cursorx, &cursory);
         }
 

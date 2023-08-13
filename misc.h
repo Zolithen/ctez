@@ -30,6 +30,6 @@ int   mini(int a, int b); // i indicates integer
 int   maxi(int a, int b);
 
 Data_buffer* utftrans_16to8(wchar_t* str, int maxsize);
-Data_buffer* utftrans_8to16(u8* str, int maxsize);
+bool utftrans_8to16(u8* str, int maxsize, Data_buffer* dat);
 
 #endif // MISC_H_INCLUDED

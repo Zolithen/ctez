@@ -24,7 +24,7 @@ void list_add(List* l, void* data, u32 sz) {
     l->item_count++;
     l->locations = erealloc(l->locations, sizeof(u32)*(l->item_count + 1));
     if (l->bytes_used + sz >= l->bytes_allocated) {
-        l->bytes_allocated += sz + 2; // TODO: Look if we need to allocate more to use less reallocs
+        l->bytes_allocated += sz + 2; // TODO: Look if we need to allocate more to use less reallocs (performance stuff)
         l->data = erealloc(l->data, l->bytes_allocated*sizeof(u8));
     }
 

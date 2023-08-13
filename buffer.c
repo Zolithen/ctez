@@ -31,7 +31,7 @@ Text_buffer* tbuffer_create(int in_size) {
     return res;
 }
 
-Text_buffer* tbuffer_from_databuffer(Data_buffer* dat) { // TODO: check if not copying the \0 is problematic
+Text_buffer* tbuffer_from_databuffer(Data_buffer* dat) {
     if (dat->cursize % 2 == 1) return NULL; // wchar_t is 2 bytes, so if we have an odd numbers of bytes in dat we can't get wchar_t right
     Text_buffer* res = emalloc(sizeof(Text_buffer));
     res->b_size = dat->cursize/2;
@@ -93,7 +93,7 @@ void tbuffer_resize(Text_buffer* buf) {
     buf->ac_current_char += buf->b_size - old_size;
 }
 
-void tbuffer_resize_custom(Text_buffer* buf, int sz) { // TODO: doesn't work
+void tbuffer_resize_custom(Text_buffer* buf, int sz) {
     int old_size = buf->b_size;
     buf->b_size += sz + 1;
 
@@ -408,7 +408,8 @@ TBUFID tsFILE_new() {
     return id;
 }
 
-TBUFID tsFILE_open(const u8* name, u32 name_size) {
+TBUFID tsFILE_open(const u8* name, u32 name_size) { // TODO: Make sure we don't load any illegal files (unsupported UNICODE, etc...) & we don't open already opened files
+    // TODO: We could have the file streaming into a data buffer and turning it into UTF16 at the same time with threads if performance is important
     FILE* f = fopen((char*)name, "r");
     if (f == NULL) {
         TB_system_error = TBSE_FILE_NOT_FOUND;
@@ -423,7 +424,11 @@ TBUFID tsFILE_open(const u8* name, u32 name_size) {
     }
     databuffer_add_byte(dat, '\0');
 
-    Data_buffer* utf16 = utftrans_8to16(dat->data, dat->cursize);
+    Data_buffer* utf16 = databuffer_new(10);
+    if (utftrans_8to16(dat->data, dat->cursize, utf16)) {
+        TB_system_error = TBSE_INVALID_FILE;
+        return 2000000;
+    }
 
     if (utf16->cursize % 2 == 1) {
         TB_system_error = TBSE_INVALID_FILE;
@@ -449,13 +454,69 @@ TBUFID tsFILE_open(const u8* name, u32 name_size) {
     return id;
 }
 
-bool tsFILE_save(TBUFID buf, const char* name) { // TODO: proper error checking
-    //FILE* f = fopen(name, "w+");
+void tsFILE_save(TBUFID buf) {
+    // Check the buffer has a bound file path (TODO: Make sure it's a valid filepath)
+    Text_buffer* b = &TB_system.buffers[buf];
+    if (b->linked_file_path.size == 0) {
+        TB_system_error = TBSE_INVALID_PATH;
+        return;
+    }
 
-    return true;
-}
-void tsFILE_close(TBUFID buf) { // TODO: Get to error checking eventually
+    Narrow_string temp_file_path = { 0 };
+    temp_file_path.str = nstrcat( // Concatenate b->linked_file_path & ".longextensionsothatnofilesareoverwrittenctez"
+        b->linked_file_path.str,
+        STR_TEMPORAL_FILE_EXTENSION.str,
+        b->linked_file_path.size,
+        STR_TEMPORAL_FILE_EXTENSION.size,
+        &temp_file_path.size);
 
+    // We first write to a temporal file to ensure the original file is not going to be corrupted, or if it is there's a backup for it
+    FILE* tempfile;
+    tempfile = fopen((char*)temp_file_path.str, "w+"); // TODO: make sure that the cast in here doesn't cause problems with weird file names
+
+    if (tempfile == NULL) {
+        TB_system_error = TBSE_CANT_CREATE_FILE;
+        return;
+    }
+
+    Data_buffer* dat_before = utftrans_16to8(b->before_cursor, b->bc_current_char);
+    Data_buffer* dat_after = utftrans_16to8(b->after_cursor + b->ac_current_char, b->b_size - b->ac_current_char);
+
+    for(u64 i = 0; i < dat_before->cursize; i++) {
+        fputc(dat_before->data[i], tempfile);
+    }
+
+    for(u64 i = 0; i < dat_after->cursize; i++) {
+        fputc(dat_after->data[i], tempfile);
+    }
+
+    fclose(tempfile);
+
+    // We now write to the original file, with a copy having been made so that we ensure no data is lost
+    FILE* actualfile;
+    actualfile = fopen((char*)b->linked_file_path.str, "w+");
+
+    if (actualfile == NULL) {
+        TB_system_error = TBSE_FILE_NOT_FOUND;
+        return;
+    }
+
+    for(u64 i = 0; i < dat_before->cursize; i++) {
+        fputc(dat_before->data[i], actualfile);
+    }
+
+    for(u64 i = 0; i < dat_after->cursize; i++) {
+        fputc(dat_after->data[i], actualfile);
+    }
+
+    fclose(actualfile);
+
+    // Delete the backup file now that we have ensured the original file has the correct data (TODO: check or smth) and free what we have used
+    remove((char*)temp_file_path.str);
+
+    databuffer_free(dat_before);
+    databuffer_free(dat_after);
+    free(temp_file_path.str);
 }
 
 /*
@@ -489,10 +550,18 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
     case 13:
     case PADENTER:
         if (is_comline) {
-            Wide_string_list* com = command_parse(buf->before_cursor, buf->current_chars_stored+1); // TODO: enter in the middle of a command the command gets executed
+            Wide_string command = { 0 };
+            command.str = wstrcat_second_no_terminator(
+                    buf->before_cursor,
+                    buf->after_cursor + buf->ac_current_char,
+                    buf->bc_current_char + 1, // wstrcat expects the first string's size to also include the terminator
+                    buf->b_size - buf->ac_current_char,
+                    &command.size);
+            Wide_string_list* com = command_parse(command.str, command.size); // TODO: enter in the middle of a command the command gets executed
             command_execute(com);
             tbuffer_clear(buf);
             free(com);
+            free(command.str);
         }
         else tbuffer_insert(buf, '\n');
         break;
@@ -627,7 +696,7 @@ u32 fbw_add_entry(TBUFID newbufid, const wchar_t* path, u32 pathsz) {
     wchar_t* file_name = wstrfilefrompath(path, pathsz, &file_name_size);
 
     wstrlist_add(&FBW_data.file_names, path, pathsz);
-    wstrlist_add(&FBW_data.names, file_name, file_name_size); // TODO: Make this only the file name, not the whole path
+    wstrlist_add(&FBW_data.names, file_name, file_name_size);
     list_add(&FBW_data.ids, &newbufid, sizeof(TBUFID));
 
     Text_buffer* buf = &TB_system.buffers[FBW_data.fbw];

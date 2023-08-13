@@ -7,13 +7,21 @@
 #include "misc.h"
 
 void wstr_start() {
+    GNSTRINIT(STR_TEMPORAL_FILE_EXTENSION, (u8*)".longextensionsothatnofilesareoverwrittenctez");
+
     GSTRINIT(STR_SYS_NEW_BUFFER, L"New buffer");
+    GSTRINIT(STR_BUFFER_NOT_LINKED_TO_FILE, L"Buffer has not been linked to a file\n");
 
     GSTRINIT(STR_COMMSG_NEED_EXACTARGS, L"Command needs exactly %d arguments\n");
     GSTRINIT(STR_COMMSG_INVALID, L"Invalid command\n");
     GSTRINIT(STR_COMMSG_INVALID_ARGTYPE, L"Invalid argument type\n");
     GSTRINIT(STR_COMMSG_INVALID_ARGRANGE, L"Argument out of range\n");
+    GSTRINIT(STR_COMMSG_BUFFER_ALREADY_BOUND, L"Buffer is already bound to window %d\n");
 }
+
+/*
+    Wide string functions
+*/
 
 // TODO: ensure this works correctly
 /* This function for some reason doesn't have the convention of sizes containing the terminator, because it's used in a place of strings without terminators */
@@ -31,6 +39,15 @@ wchar_t* wstrcat(const wchar_t* first, const wchar_t* second, u32 szfirst, u32 s
     memcpy(res, first, (szfirst-1)*sizeof(wchar_t) );
     memcpy(res+szfirst - 1, second, szsecond*sizeof(wchar_t));
     if (ressize != NULL) *ressize = szfirst + szsecond - 1;
+    return res;
+}
+
+wchar_t* wstrcat_second_no_terminator(const wchar_t* first, const wchar_t* second, u32 szfirst, u32 szsecond, u32* ressize) {
+    wchar_t* res = ecalloc(szfirst + szsecond, sizeof(wchar_t));
+    memcpy(res, first, (szfirst-1)*sizeof(wchar_t) );
+    memcpy(res+szfirst - 1, second, szsecond*sizeof(wchar_t));
+    if (ressize != NULL) *ressize = szfirst + szsecond;
+    res[szfirst + szsecond - 1] = '\0';
     return res;
 }
 
@@ -101,4 +118,33 @@ u32 wstrlen(const wchar_t* str) {
     const wchar_t* t = str;
     while (*t != L'\0') t++;
     return t - str;
+}
+
+
+/*
+    Narrow string functions
+*/
+
+u8* nstrfilefrompath(const u8* str, u32 sz, u32* ressize) { // Literally the same as the wstr variant but without wchar_t & L's
+    const u8* secstr = str + sz - 1;
+    while ((secstr > str) && (*secstr != '/') && (*secstr != '\\')) secstr--;
+    if ((secstr != str) || (*secstr == '/') || (*secstr == '\\')) secstr++;
+    *ressize = str + sz - secstr;
+    u8* newstr = ecalloc(*ressize, sizeof(u8));
+    memcpy(newstr, secstr, (*ressize)*sizeof(u8));
+    return newstr;
+}
+
+u32 nstrlen(const u8* str) {
+    const u8* t = str;
+    while (*t != '\0') t++;
+    return t - str;
+}
+
+u8* nstrcat(const u8* first, const u8* second, u32 szfirst, u32 szsecond, u32* ressize) {
+    u8* res = ecalloc(szfirst + szsecond - 1, sizeof(u8));
+    memcpy(res, first, (szfirst-1)*sizeof(u8) );
+    memcpy(res+szfirst - 1, second, szsecond*sizeof(u8));
+    if (ressize != NULL) *ressize = szfirst + szsecond - 1;
+    return res;
 }

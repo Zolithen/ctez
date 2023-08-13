@@ -115,8 +115,8 @@ Data_buffer* utftrans_16to8(wchar_t* str, int maxsize) {
    to an ungisned short* is the UTF16 string.
    Description of the algorithm:
    https://stackoverflow.com/questions/73758747/looking-for-the-description-of-the-algorithm-to-convert-utf8-to-utf16 */
-Data_buffer* utftrans_8to16(u8* str, int maxsize) {
-    Data_buffer* dat = databuffer_new(10);
+/* Returns true if the data buffer is invalid */
+bool utftrans_8to16(u8* str, int maxsize, Data_buffer* dat) {
     for (int i = 0; i < maxsize; i++) {
         u8 c = str[i];
 
@@ -145,12 +145,12 @@ Data_buffer* utftrans_8to16(u8* str, int maxsize) {
                 databuffer_add_bytes(dat, (u8* )&utf16, 2);
             }
             i+=2;
-        } else if ((c & 0xF8) == 0xF0) { // Throw error. UTF8 representation has 4 bytes and thus not supported. TODO: better error report (ej: not opening file)
-            assert(false);
+        } else if ((c & 0xF8) == 0xF0) {
+            return true;
         } else { // TODO: don't
-            return dat;
+            return false;
         }
     }
 
-    return dat;
+    return false;
 }

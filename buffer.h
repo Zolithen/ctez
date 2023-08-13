@@ -93,7 +93,9 @@ typedef enum {
     TBSE_ALREADY_FREE,
     TBSE_OUT_OF_BOUNDS,
     TBSE_FILE_NOT_FOUND,
-    TBSE_INVALID_FILE
+    TBSE_INVALID_FILE,
+    TBSE_INVALID_PATH,
+    TBSE_CANT_CREATE_FILE
 } TB_system_error_code;
 
 TB_system_error_code TB_system_error;
@@ -106,8 +108,7 @@ void ts_free_buffer(TBUFID id);
 TBUFID ts_ensure_free();
 TBUFID tsFILE_new();
 TBUFID tsFILE_open(const u8* name, u32 name_size);
-bool tsFILE_save(TBUFID buf, const char* name);
-void tsFILE_close(TBUFID buf);
+void tsFILE_save(TBUFID buf);
 
 
 

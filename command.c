@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <limits.h>
 
 #include "command.h"
 
@@ -52,10 +53,10 @@ Wide_string_list* command_parse(wchar_t* com, int coml) {
 /*
 open <file>
 bind <window number> <buffer id>
+save <buffer id>
 new
 
 getpath <buffer id>
-save <buffer id>
 saveall
 filebind <file path> <buffer id>
 
@@ -68,7 +69,7 @@ void command_execute(Wide_string_list* com) {
         Wide_string command = wstrlist_get(com, 0);
         if (wstrcmp(command.str, L"open", command.size, 5)) {
 
-            if (comerror_args_expect_exactly(com, 1)) return;
+            if (comexpect_args(com, 1)) return;
             Wide_string file_name = wstrlist_get(com, 1);
 
             u8* resstr = wstrdgr(file_name.str, file_name.size);
@@ -87,43 +88,25 @@ void command_execute(Wide_string_list* com) {
             bwindow_buf_set_flags_on(bwindows[chosen_buffer], TB_UPDATED);*/
             fbw_add_entry(id, file_name.str, file_name.size);
 
-        } else if (wstrcmp(command.str, L"bind", command.size, 5)) { // TODO: consider making an alternative version that only takes the window ID (more intuitive)
+        // TODO: consider making an alternative version that only takes the window ID (requires interaction with the FBW, select the buffer & enter)
+        } else if (wstrcmp(command.str, L"bind", command.size, 5)) {
 
-            if (comerror_args_expect_exactly(com, 2)) return;
-
-            Wide_string _winid = wstrlist_get(com, 1);
-            Wide_string _bufid = wstrlist_get(com, 2);
-
-            if ((wstrisnum(_winid.str, _winid.size)) && (wstrisnum(_bufid.str, _bufid.size))) {
-                u32 winid = wstrtonum(_winid.str, _winid.size);
-                u32 bufid = wstrtonum(_bufid.str, _bufid.size);
-
-                if ( (winid > 4) || ((bufid < NUMBER_OF_SYSTEM_WINDOWS) || (bufid >= TB_system.current_alloc )) ) {
-                    bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
-                    return;
-                }
-
-                bwindows[TWIN(winid)]->buf_id = bufid;
-                bwindow_buf_set_flags_on(bwindows[TWIN(winid)], TB_UPDATED);
-            } else {
-                bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGTYPE);
-                return;
-            }
-
-            /*
-            if (comerror_args_expect_exactly(com, 2)) return;
-            if (comerror_argtype_expect_exactly(com, 1, COMARGTYPE_INT)) return;
-            if (comerror_argtype_expect_exactly(com, 2, COMARGTYPE_INT)) return;
-            if (comerror_argrange_expect_exactly(com, 1, 1, 4)) return;
-            if (comerror_argrange_expect_exactly(com, 2, NUMBER_OF_SYSTEM_WINDOWS, TB_system.current_alloc)) return;
+            if (comexpect_args(com, 2)) return;
+            if (comexpect_argtype(com, 1, COMARGTYPE_INT)) return;
+            if (comexpect_argtype(com, 2, COMARGTYPE_INT)) return;
+            if (comexpect_argrange(com, 1, 1, 4)) return;
+            if (comexpect_argrange(com, 2, NUMBER_OF_SYSTEM_WINDOWS, INT_MAX)) return;
+            if (comexpect_false_in_array(com, 2, TB_system.free, TB_system.current_alloc)) return;
 
             Wide_string _winid = wstrlist_get(com, 1);
             Wide_string _bufid = wstrlist_get(com, 2);
             u32 winid = wstrtonum(_winid.str, _winid.size);
             u32 bufid = wstrtonum(_bufid.str, _bufid.size);
+
+            if (comexpect_buffer_unbound(bufid)) return;
+
             bwindows[TWIN(winid)]->buf_id = bufid;
             bwindow_buf_set_flags_on(bwindows[TWIN(winid)], TB_UPDATED);
-            */
 
         } else if (wstrcmp(command.str, L"new", command.size, 4)) {
 
@@ -132,22 +115,14 @@ void command_execute(Wide_string_list* com) {
 
         } else if (wstrcmp(command.str, L"save", command.size, 5)) {
 
-            if (comerror_args_expect_exactly(com, 1)) return;
+            if (comexpect_args(com, 1)) return;
+            if (comexpect_argtype(com, 1, COMARGTYPE_INT)) return;
+            if (comexpect_argrange(com, 1, NUMBER_OF_SYSTEM_WINDOWS, INT_MAX)) return;
+            if (comexpect_false_in_array(com, 1, TB_system.free, TB_system.current_alloc)) return;
             Wide_string _bufid = wstrlist_get(com, 1);
+            u32 bufid = wstrtonum(_bufid.str, _bufid.size);
 
-            if (wstrisnum(_bufid.str, _bufid.size)) {
-                u32 bufid = wstrtonum(_bufid.str, _bufid.size);
-
-                if ( (bufid < NUMBER_OF_SYSTEM_WINDOWS) || (bufid >= TB_system.current_alloc) ) {
-                    bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
-                    return;
-                }
-
-                // TODO: Do the actual saving
-            } else {
-                bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGTYPE);
-                return;
-            }
+            tsFILE_save(bufid); // TODO: Save error reporting
 
         } else {
             bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID);
@@ -161,8 +136,8 @@ void command_execute(Wide_string_list* com) {
     return;
 }
 
-bool comerror_args_expect_exactly(Wide_string_list* l, int numargs) {
-    if (l->item_count - 1 != (u32)numargs) {
+bool comexpect_args(Wide_string_list* com, int numargs) {
+    if (com->item_count - 1 != (u32)numargs) {
         Wide_string msg = { 0 };
         int chars_to_alloc = _scwprintf(STR_COMMSG_NEED_EXACTARGS.str, numargs) + 1; // _scwprintf doesn't count the terminating char
         msg.size = chars_to_alloc;
@@ -175,16 +150,77 @@ bool comerror_args_expect_exactly(Wide_string_list* l, int numargs) {
     return false;
 }
 
-bool comerror_argtype_expect_exactly(Wide_string_list* com, u32 argnum, Command_argument_type argtype) {
-    if (argtype == COMARGTYPE_INT) { // TODO: This can be made more efficient by cutting the wstrlist_get method and creating a wstrlist_isposnum or something
+bool comexpect_argtype(Wide_string_list* com, u32 argnum, Command_argument_type argtype) {
+    if (argtype == COMARGTYPE_INT) { // TODO: This can be made more efficient by cutting the wstrlist_get method and creating a wstrlist_isposnum or expanding it here
         Wide_string temp = wstrlist_get(com, argnum);
-        return wstrisnum(temp.str, temp.size);
+        if (wstrisnum(temp.str, temp.size)) {
+            return false;
+        } else {
+            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGTYPE);
+            return true;
+        }
     }
-    return true;
+    return false;
 }
-bool comerror_argrange_expect_exactly(Wide_string_list* com, u32 argnum, int minimum, int maximum) { /* We expect the argument to be already an integer */
+bool comexpect_argrange(Wide_string_list* com, u32 argnum, int minimum, int maximum) { /* We expect the argument to be already an integer */
+    Wide_string temp = wstrlist_get(com, argnum);
+    u32 tempnum = wstrtonum(temp.str, temp.size);
+    if (((u32)minimum <= tempnum) && (tempnum <= (u32)maximum)) {
+        return false;
+    } else {
+        bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+        return true;
+    }
+}
 
-    return false
+bool comexpect_false_in_array(Wide_string_list* com, u32 argnum, bool* arr, u32 arrsize) {
+    Wide_string temp = wstrlist_get(com, argnum);
+    u32 tempnum = wstrtonum(temp.str, temp.size);
+
+    if (tempnum < arrsize) {
+        if (arr[tempnum]) {
+            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+        return true;
+    }
+}
+
+bool comexpect_true_in_array(Wide_string_list* com, u32 argnum, bool* arr, u32 arrsize) {
+    Wide_string temp = wstrlist_get(com, argnum);
+    u32 tempnum = wstrtonum(temp.str, temp.size);
+
+    if (tempnum < arrsize) {
+        if (!arr[tempnum]) {
+            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+        return true;
+    }
+}
+
+bool comexpect_buffer_unbound(TBUFID bufid) {
+    for (int i = TWIN4; i <= TWIN1; i++) {
+        if (bwindows[i]->buf_id == bufid) {
+            Wide_string msg = { 0 };
+            int chars_to_alloc = _scwprintf(STR_COMMSG_BUFFER_ALREADY_BOUND.str, i) + 1; // _scwprintf doesn't count the terminating char
+            msg.size = chars_to_alloc;
+            msg.str = emalloc(chars_to_alloc * sizeof(wchar_t));
+            _snwprintf_s(msg.str, chars_to_alloc, chars_to_alloc - 1, STR_COMMSG_BUFFER_ALREADY_BOUND.str, (int)(i - NUMBER_OF_SYSTEM_WINDOWS + 1));
+            bwindow_buf_insert_text(bwindows[TWINCOM], msg);
+            free(msg.str);
+            return true;
+        }
+    }
+    return false;
 }
 
 
