@@ -24,7 +24,7 @@ typedef struct { // TODO: Make this into an actual "gap buffer" (basically the o
     wchar_t* before_cursor;
     wchar_t* after_cursor;
     int b_size;
-    int bc_current_char;
+    int bc_current_char; // We are not supporting huge files
     int ac_current_char;
     int current_chars_stored;
     Narrow_string linked_file_path;
@@ -59,6 +59,7 @@ Text_buffer* tbuffer_from_databuffer(Data_buffer* dat); /* Creates a Text_buffer
 bool tbuffer_insert(Text_buffer* buf, wchar_t c); /* Types a character where the cursor is */
 bool tbuffer_insert_string_bypass(Text_buffer* buf, wchar_t* str, int sz); /* Bypasses writtable tag */
 int tbuffer_move_cursor(Text_buffer* buf, int amount); /* Moves the cursor amount characters backwards(negative amount) or forwards (positive amount)*/
+void tbuffer_move_cursor_to_pos(Text_buffer* buf, int pos); /* Moves the cursor to the given pos in the text buffer */
 void tbuffer_clear(Text_buffer* buf); /* Sets the whole buffer to 0s */
 
 /* Necessary memory management */
@@ -70,6 +71,8 @@ void tbuffer_free(Text_buffer* buf);
 int tbuffer_last_nl_before(Text_buffer* buf, int pos); /* Finds the last newline before the given position */
 int tbuffer_first_nl_after(Text_buffer* buf, int pos); /* Finds the first newline after the given position */
 wchar_t* tbuffer_translate_string(Text_buffer* buf, Buffer_order b, int st, int en); /* Translates a section of the given buffer into a wide string */
+int tbuffer_find_line(Text_buffer* buf, int l); /* Finds the position of the start of the l'th line*/
+int tbuffer_get_cursor_line(Text_buffer* buf); /* Finds the line the cursor is currently in */
 
 void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx); /* Renders the lines that are visible on the given window */
 
@@ -138,7 +141,7 @@ void bwindow_handle_keypress(Buffer_window* w, int keypress);
 void bwindow_buf_set_flags_on(Buffer_window* w, u8 flags);
 void bwindow_buf_set_flags_off(Buffer_window* w, u8 flags);
 void bwindow_buf_insert_text(Buffer_window* w, Wide_string str);
-void bwindow_update(Buffer_window* w, int* cursorx, int* cursory);
+void bwindow_update(Buffer_window* w, int winh, int* cursorx, int* cursory, bool is_selected_window);
 
 
 /*

@@ -8,17 +8,10 @@
 #include "strlist.h"
 #include "buffer.h"
 
-typedef enum {
-    COMRESP_OK = 1,
-    COMRESP_INVALID = 2, // Command not found
-    COMRESP_NEEDARGS = 3, // Need more arguments
-    COMRESP_NOTFOUND = 4 // File/directory not found
-} Command_response_code; // Is it really needed?
-
 typedef struct {
-    Command_response_code resp;
-    Wide_string msg;
-} Command_response;
+    Wide_string name;
+    void (*func)(Wide_string_list* com);
+} Command;
 
 typedef enum {
     COMARGTYPE_ANY,

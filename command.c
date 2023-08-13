@@ -123,9 +123,18 @@ void command_execute(Wide_string_list* com) {
             u32 bufid = wstrtonum(_bufid.str, _bufid.size);
 
             tsFILE_save(bufid); // TODO: Save error reporting
+            if (TB_system_error != TBSE_OK) {
+                if (TB_system_error == TBSE_INVALID_PATH) {
+                    bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_PATH);
+                }
 
+                TB_system_error = TBSE_OK;
+                return;
+            }
+
+            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_SAVED_FILE);
         } else {
-            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID);
+            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_COMMAND);
             return;
         }
     } else {

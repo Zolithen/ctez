@@ -231,10 +231,15 @@ int main() {
                 if ((selected_window == TWIN3)
                  || (selected_window == TWIN4)) selected_window = TWIN2;
             }
-            getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
-            bwindow_buf_set_flags_on(bwindows[selected_window], TB_UPDATED);
+            curwin = bwindows[selected_window];
+            getbegyx(curwin->curses_window, selwiny, selwinx);
+            bwindow_buf_set_flags_on(curwin, TB_UPDATED);
         } else if (keypress == KEY_F(2)) {
-
+            /*Text_buffer* tbuf = &TB_system.buffers[curwin->buf_id];
+            int pos = tbuffer_find_line(tbuf, 3);
+            if (pos != -1) {
+                tbuffer_move_cursor_to_pos(tbuf, pos);
+            }*/
         }
 
         //mvprintw(winh-1, 0, "");
@@ -246,7 +251,11 @@ int main() {
         bwindow_handle_keypress(curwin, keypress);
         for (int i = 0; i < MAX_WINDOWS; i++) {
             // TODO: Do not update windows that are outside the selected_layout
-            bwindow_update(bwindows[i], &cursorx, &cursory);
+            if (selected_window == i) {
+                bwindow_update(bwindows[i], winh, &cursorx, &cursory, true);
+            } else {
+                bwindow_update(bwindows[i], winh, NULL, NULL, false);
+            }
         }
 
         move(selwiny + cursory, selwinx + cursorx);

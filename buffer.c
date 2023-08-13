@@ -140,6 +140,10 @@ int tbuffer_move_cursor(Text_buffer* buf, int amount) {
     return 0;
 }
 
+void tbuffer_move_cursor_to_pos(Text_buffer* buf, int pos) {
+    tbuffer_move_cursor(buf, pos - buf->bc_current_char - (buf->bc_current_char > pos ? 0 : 1) );
+}
+
 void tbuffer_clear(Text_buffer* buf) {
     memset(buf->before_cursor, 0, buf->b_size*sizeof(wchar_t));
     memset(buf->after_cursor, 0, buf->b_size*sizeof(wchar_t));
@@ -158,7 +162,7 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
     int winw = getmaxx(win);
     int center = winh % 2 == 0 ? winh/2 : (winh-1)/2;
     int line_offset = 0;
-    wchar_t** lines = ecalloc(winh, sizeof(wchar_t*)); // this one used to crash using the resize custom above
+    wchar_t** lines = ecalloc(winh, sizeof(wchar_t*));
     bool*     lines_hasinit = ecalloc(winh, sizeof(bool));
     int*      lines_size = ecalloc(winh, sizeof(int)); // Wrap size
     int c_linebef_size = 0;
@@ -171,6 +175,7 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
 
     // before_cursor and first part of the current line
     for (int i = 0; i <= buf->bc_current_char; i++) {
+        if (buf->bc_current_char == 0) break;
         if (buf->before_cursor[buf->bc_current_char - i] == '\n' ) {
             wchar_t* str = tbuffer_translate_string(buf, BO_BEFORE, buf->bc_current_char - i + 1, buf->bc_current_char - start_offset);
             lines[center+line_offset] = str;
@@ -206,6 +211,7 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
     wchar_t* current_line_after = NULL;
     int c_lineaf_size = 0;
     for (int i = 0; i <= buf->b_size - buf->ac_current_char; i++) {
+        if (buf->b_size == buf->ac_current_char) break;
         if (buf->after_cursor[buf->ac_current_char + i] == '\n') {
             if (line_offset != 0) { // We need to handle this case differently bcs we grabbed the first part of the current line in before
                 wchar_t* str = tbuffer_translate_string(buf, BO_AFTER, buf->ac_current_char + start_offset, buf->ac_current_char + i);
@@ -242,8 +248,10 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
 
     // Correctly get the current line. We have the first part in lines[center] and the second one in current_line_after.
     wchar_t* current_line_before = lines[center];
-    lines[center] = wstrcat_in_tbuffer_render(current_line_before, current_line_after, c_linebef_size, c_lineaf_size);
-    lines_size[center] = (int)floor((c_linebef_size + c_lineaf_size)/winw);
+    if (lines[center] != NULL) {
+        lines[center] = wstrcat_in_tbuffer_render(current_line_before, current_line_after, c_linebef_size, c_lineaf_size);
+        lines_size[center] = (int)floor((c_linebef_size + c_lineaf_size)/winw);
+    }
 
     // Render everything
     int centerx = 0;
@@ -255,6 +263,7 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
             wmove(win, i, 0);
             wprintw(win, "%d", i+1);
         }*/
+        if (lines[i] == NULL) continue;
         if (i == center) {
             wmove(win, i+wrap_line_offset, 0);
             waddwstr(win, current_line_before);
@@ -267,8 +276,10 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
     }
     wrefresh(win);
 
-    *cx = centerx;
-    *cy = centery;
+    if ((cx != NULL) && (cy != NULL)) {
+        *cx = centerx;
+        *cy = centery;
+    }
     wrefresh(stdscr);
 
     free(lines_hasinit);
@@ -328,6 +339,28 @@ int tbuffer_first_nl_after(Text_buffer* buf, int pos) {
         }
     }
     return buf->b_size;
+}
+
+int tbuffer_find_line(Text_buffer* buf, int l) {
+    for (int i = 0; i < buf->bc_current_char; i++) { // Check first for the after_cursor
+        if (buf->before_cursor[i] == L'\n') l--;
+        if (l == 1) return i;
+    }
+
+    for (int i = buf->ac_current_char; i < buf->b_size; i++) {
+        if (buf->after_cursor[i] == L'\n') l--;
+        if (l == 1) return i;
+    }
+    return -1;
+}
+
+int tbuffer_get_cursor_line(Text_buffer* buf) {
+    int l = 0;
+    wchar_t* bc = buf->before_cursor;
+    for (int i = 0; i < buf->bc_current_char; i++) {
+        if (bc[i] == '\n') l++;
+    }
+    return l;
 }
 
 void tbuffer_free(Text_buffer* buf) {
@@ -474,7 +507,7 @@ void tsFILE_save(TBUFID buf) {
     FILE* tempfile;
     tempfile = fopen((char*)temp_file_path.str, "w+"); // TODO: make sure that the cast in here doesn't cause problems with weird file names
 
-    if (tempfile == NULL) {
+    if (tempfile == NULL) { // If we can't create this file wtf are we doing
         TB_system_error = TBSE_CANT_CREATE_FILE;
         return;
     }
@@ -654,13 +687,25 @@ void bwindow_buf_insert_text(Buffer_window* w, Wide_string str) {
     tbuffer_insert_string_bypass(buf, str.str, str.size);
 }
 
-void bwindow_update(Buffer_window* w, int* cursorx, int* cursory) {
+void bwindow_update(Buffer_window* w, int winh, int* cursorx, int* cursory, bool is_selected_window) {
     Text_buffer* curbuffer = &(TB_system.buffers[w->buf_id]);
     if (IS_FLAG_ON(curbuffer->flags, TB_UPDATED)) {
         SET_FLAG_OFF(curbuffer->flags, TB_UPDATED);
         /* We return the current array of lines from the function to free them after we have already set the new lines.
            This is because addwstr apparently needs the pointer alive and doesn't copy the contents of the string? Idk */
         tbuffer_render(w->curses_window, curbuffer, w->prevl, cursory, cursorx);
+
+        if (is_selected_window) {
+            // Render the line number
+            wchar_t* line_number = wstrfromnum(tbuffer_get_cursor_line(curbuffer) + 1, NULL);
+
+            for (int i = 1; i < 8; i++) {
+                mvaddch(winh - BOTTOM_SECTION_HEIGHT, i, 0x2501);
+            }
+
+            mvaddwstr(winh - BOTTOM_SECTION_HEIGHT, 1, line_number);
+            free(line_number);
+        }
     }
 }
 

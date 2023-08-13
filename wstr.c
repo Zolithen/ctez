@@ -13,10 +13,13 @@ void wstr_start() {
     GSTRINIT(STR_BUFFER_NOT_LINKED_TO_FILE, L"Buffer has not been linked to a file\n");
 
     GSTRINIT(STR_COMMSG_NEED_EXACTARGS, L"Command needs exactly %d arguments\n");
-    GSTRINIT(STR_COMMSG_INVALID, L"Invalid command\n");
+    GSTRINIT(STR_COMMSG_INVALID_COMMAND, L"Invalid command\n");
     GSTRINIT(STR_COMMSG_INVALID_ARGTYPE, L"Invalid argument type\n");
     GSTRINIT(STR_COMMSG_INVALID_ARGRANGE, L"Argument out of range\n");
+    GSTRINIT(STR_COMMSG_INVALID_PATH, L"Invalid path\n");
     GSTRINIT(STR_COMMSG_BUFFER_ALREADY_BOUND, L"Buffer is already bound to window %d\n");
+
+    GSTRINIT(STR_COMMSG_SAVED_FILE, L"File has been saved\n");
 }
 
 /*
@@ -62,7 +65,7 @@ wchar_t* wstrfromnum(u32 num, u32* ressize) {
         prevpower = (u32) pow(10, i + 1);
     }
 
-    *ressize = sz + 1;
+    if (ressize != NULL) *ressize = sz + 1;
 
     return text;
 }
