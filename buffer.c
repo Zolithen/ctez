@@ -3,7 +3,9 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
+#include "app.h"
 #include "buffer.h"
 
 #include "misc.h"
@@ -61,7 +63,18 @@ bool tbuffer_insert(Text_buffer* buf, wchar_t c) {
     return false;
 }
 
-bool tbuffer_insert_string_bypass(Text_buffer* buf, wchar_t* str, int sz) {
+void tbuffer_insert_bypass(Text_buffer* buf, wchar_t c) {
+    if (buf->current_chars_stored >= buf->b_size) {
+        tbuffer_resize(buf);
+    }
+    buf->before_cursor[buf->bc_current_char] = c;
+    buf->current_chars_stored++;
+    buf->bc_current_char++;
+
+    buf->flags |= TB_UPDATED;
+}
+
+void tbuffer_insert_string_bypass(Text_buffer* buf, wchar_t* str, int sz) {
     if (buf->current_chars_stored + sz - 1 >= buf->b_size) {
         tbuffer_resize_custom(buf, sz);
     }
@@ -70,8 +83,33 @@ bool tbuffer_insert_string_bypass(Text_buffer* buf, wchar_t* str, int sz) {
     buf->bc_current_char += sz - 1;
 
     buf->flags |= TB_UPDATED;
+}
 
-    return true;
+void tbuffer_insert_formatted_bypass(Text_buffer* buf, const wchar_t* formatstring, ...) {
+    va_list args;
+    va_start(args, formatstring);
+
+    Wide_string msg = { 0 };
+    int chars_to_alloc = _vscwprintf(formatstring, args) + 1; // _vscwprintf doesn't count the terminating char
+    msg.size = chars_to_alloc;
+    msg.str = emalloc(chars_to_alloc * sizeof(wchar_t));
+    _vsnwprintf_s(msg.str, chars_to_alloc, chars_to_alloc - 1, formatstring, args); // _vsnwprintf_s is probably the worst name I have seen for a function
+    // variadic store new wide print formatted secure
+    tbuffer_insert_string_bypass(buf, msg.str, msg.size);
+
+    free(msg.str);
+    va_end(args);
+}
+
+bool tbuffer_backspace(Text_buffer* buf) {
+    if (buf->bc_current_char != 0) {
+        buf->before_cursor[buf->bc_current_char-1] = 0;
+        buf->bc_current_char--;
+        buf->current_chars_stored--;
+        buf->flags |= TB_UPDATED;
+        return true;
+    }
+    return false;
 }
 
 void tbuffer_resize(Text_buffer* buf) {
@@ -156,6 +194,7 @@ void tbuffer_clear(Text_buffer* buf) {
 
 /* We start iterating over chars that are near the cursor, so we find line breaks and
    get the amount of chars between them so we can render lines correctly */
+// FIXME: When the first character of a buffer is selected, the buffer renders nothing and cy, cx reset both to 0
 void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx) {
 
     int winh = getmaxy(win);
@@ -572,6 +611,7 @@ Buffer_window* bwindow_create() {
     b->buf_id = tsFILE_new();
     b->prevl = ecalloc(1, sizeof(Lines_buffer));
     b->flags = 0;
+    b->win_id = -1;
     return b;
 }
 
@@ -579,6 +619,7 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
 
     Text_buffer* buf = &TB_system.buffers[w->buf_id];
     bool is_comline = IS_FLAG_ON(buf->flags, TB_COMLINE);
+    bool is_writtable = IS_FLAG_ON(buf->flags, TB_WRITTABLE);
     switch (key) {
     case 13:
     case PADENTER:
@@ -592,30 +633,26 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
                     &command.size);
             Wide_string_list* com = command_parse(command.str, command.size); // TODO: enter in the middle of a command the command gets executed
             command_execute(com);
+            buf = &TB_system.buffers[w->buf_id]; // We get the buffer again because command_execute might have reallocated the buffers array
             tbuffer_clear(buf);
             free(com);
             free(command.str);
         }
-        else tbuffer_insert(buf, '\n');
+        else if (is_writtable) tbuffer_insert(buf, '\n');
         break;
 
     case 9:
-        if (!is_comline) tbuffer_insert(buf, '\t');
+        if ((!is_comline) && (is_writtable)) tbuffer_insert(buf, '\t');
         break;
 
     case 8: // Backspace
-        if (buf->bc_current_char != 0) {
-            buf->before_cursor[buf->bc_current_char-1] = 0;
-            buf->bc_current_char--;
-            buf->current_chars_stored--;
-            buf->flags |= TB_UPDATED;
-        }
+        if (is_writtable) tbuffer_backspace(buf);
         break;
 
-    case PADSTAR: tbuffer_insert(buf, '*'); break;
-    case PADSLASH: tbuffer_insert(buf, '/'); break;
-    case PADPLUS: tbuffer_insert(buf, '+'); break;
-    case PADMINUS: tbuffer_insert(buf, '-'); break;
+    case PADSTAR: if (is_writtable) tbuffer_insert(buf, '*'); break;
+    case PADSLASH: if (is_writtable) tbuffer_insert(buf, '/'); break;
+    case PADPLUS: if (is_writtable) tbuffer_insert(buf, '+'); break;
+    case PADMINUS: if (is_writtable) tbuffer_insert(buf, '-'); break;
 
     case KEY_LEFT:
         tbuffer_move_cursor(buf, -1);
@@ -662,7 +699,7 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
 
     }
 
-    if ((key >= 32 && key <= 0x7E) || (key >= 0xA1 && key <= 0xFF)) {
+    if (((key >= 32 && key <= 0x7E) || (key >= 0xA1 && key <= 0xFF)) && (is_writtable))  {
         tbuffer_insert(buf, key);
     }
 }
@@ -713,55 +750,87 @@ void bwindow_update(Buffer_window* w, int winh, int* cursorx, int* cursory, bool
     FILE BUFFER WINDOW FUNCTIONS
 */
 
-static struct {
-    List ids;
-    Wide_string_list file_names;
-    Wide_string_list names;
-    TBUFID fbw;
-} FBW_data;
-
-void fbw_start(TBUFID fbw) {
-    list_init(&FBW_data.ids, 100);
-    wstrlist_init(&FBW_data.file_names, 100);
-    wstrlist_init(&FBW_data.names, 100);
-    FBW_data.fbw = fbw;
+void fbw_start(TBUFID fb) {
+    list_init(&App.fbw.ids, 100);
+    list_init(&App.fbw.binds, 100);
+    wstrlist_init(&App.fbw.file_names, 100);
+    wstrlist_init(&App.fbw.names, 100);
+    App.fbw.fb = fb;
 }
 
 void fbw_shutdown() {
-    free(FBW_data.names.data);
-    free(FBW_data.names.locations);
-    free(FBW_data.file_names.data);
-    free(FBW_data.file_names.locations);
-    free(FBW_data.ids.data);
-    free(FBW_data.ids.locations);
+    free(App.fbw.names.data);
+    free(App.fbw.names.locations);
+    free(App.fbw.file_names.data);
+    free(App.fbw.file_names.locations);
+    free(App.fbw.ids.data);
+    free(App.fbw.ids.locations);
 }
 
-u32 fbw_add_entry(TBUFID newbufid, const wchar_t* path, u32 pathsz) {
+u32 fbw_add_entry(TBUFID newbufid, const wchar_t* path, u32 pathsz, int* winid) {
     u32 file_name_size = 0;
     wchar_t* file_name = wstrfilefrompath(path, pathsz, &file_name_size);
 
-    wstrlist_add(&FBW_data.file_names, path, pathsz);
-    wstrlist_add(&FBW_data.names, file_name, file_name_size);
-    list_add(&FBW_data.ids, &newbufid, sizeof(TBUFID));
-
-    Text_buffer* buf = &TB_system.buffers[FBW_data.fbw];
+    wstrlist_add(&App.fbw.file_names, path, pathsz);
+    wstrlist_add(&App.fbw.names, file_name, file_name_size);
+    list_add(&App.fbw.ids, &newbufid, sizeof(TBUFID));
+    if (winid == NULL) {
+        int tempval = -1;
+        list_add(&App.fbw.binds, &tempval, sizeof(int));
+    } else list_add(&App.fbw.binds, winid, sizeof(int));
 
     // Insert the string in the correct buffers
     // TODO: Use a version of printf to do this
-    u32 newnamesz = 0;
-    u32 bufidstrlen = 0;
-    wchar_t* _label = wstrcat(file_name, L"\n", file_name_size, 2, &newnamesz);
-    wchar_t* _bufid = wstrfromnum(newbufid, &bufidstrlen);
-    wchar_t* _bufidstr = wstrcat(_bufid, L" ", bufidstrlen, 2, &bufidstrlen);
-    wchar_t* label = wstrcat(_bufidstr, _label, bufidstrlen, newnamesz, &newnamesz);
+    Text_buffer* buf = &TB_system.buffers[App.fbw.fb];
+
     tbuffer_move_cursor(buf, buf->current_chars_stored - buf->bc_current_char);
-    tbuffer_insert_string_bypass(&TB_system.buffers[FBW_data.fbw], label, newnamesz);
+    tbuffer_insert_formatted_bypass(buf, L"%d %s\n", (int)newbufid, file_name);
 
     free(file_name);
-    free(label);
+    /*free(label);
     free(_label);
     free(_bufid);
-    free(_bufidstr);
+    free(_bufidstr);*/
 
-    return FBW_data.ids.item_count;
+    return App.fbw.ids.item_count;
+}
+
+int fbw_find_entry(TBUFID id) {
+    for (u32 i = 0; i < App.fbw.ids.item_count; i++) {
+        Sized_pointer o = list_get(&App.fbw.ids, i);
+        if ( *((TBUFID*)o.data) == id) return (int)i;
+    }
+    return -1;
+}
+
+void fbw_mark_bound(TBUFID id, int win_id) {
+    Text_buffer* buf = &TB_system.buffers[App.bwindows[TWINFILE]->buf_id];
+    int entry_num = fbw_find_entry(id);
+    if (entry_num == -1) return;
+    Wide_string file_name = wstrlist_get(&App.fbw.names, entry_num);
+
+    tbuffer_move_cursor_to_pos(buf, tbuffer_find_line(buf, entry_num+2));
+    while ((buf->before_cursor[buf->bc_current_char - 1] != L'\n') && (buf->bc_current_char != 0)) {
+        tbuffer_backspace(buf);
+    }
+    tbuffer_insert_formatted_bypass(buf, L"%d %s (%d)", (int)id, file_name.str, MAX_WINDOWS - win_id);
+    tbuffer_move_cursor_to_pos(buf, buf->current_chars_stored);
+
+    buf->flags |= TB_UPDATED;
+}
+
+void fbw_mark_unbound(TBUFID id) {
+    Text_buffer* buf = &TB_system.buffers[App.bwindows[TWINFILE]->buf_id];
+    int entry_num = fbw_find_entry(id);
+    if (entry_num == -1) return;
+    Wide_string file_name = wstrlist_get(&App.fbw.names, entry_num);
+
+    tbuffer_move_cursor_to_pos(buf, tbuffer_find_line(buf, entry_num+2));
+    while ((buf->before_cursor[buf->bc_current_char - 1] != L'\n') && (buf->bc_current_char != 0)) {
+        tbuffer_backspace(buf);
+    }
+    tbuffer_insert_formatted_bypass(buf, L"%d %s", (int)id, file_name.str);
+    tbuffer_move_cursor_to_pos(buf, buf->current_chars_stored);
+
+    buf->flags |= TB_UPDATED;
 }

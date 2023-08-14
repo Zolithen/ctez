@@ -3,7 +3,9 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <math.h>
+#include <stdarg.h>
 
+#include "app.h"
 #include "types.h"
 #include "misc.h"
 #include "wstr.h"
@@ -20,6 +22,11 @@
 
 void platform_sleep(int milisecs) { // You can change this one function to the platform's sleep function (it's not in the C standard)
     Sleep(milisecs); // Windows
+}
+
+// TODO: Add printf variant
+void print_twincom(Wide_string msg) {
+    bwindow_buf_insert_text(App.bwindows[TWINCOM], msg);
 }
 
 int start_display() {
@@ -133,12 +140,12 @@ void show_double_layout(Buffer_window** wins, int winh, int winw) {
     refresh();
 }
 
-void show_layout(int sellayout, int winh, int winw) {
-    if (sellayout == 0) {
-        show_monolithic_layout(bwindows, winh, winw);
-    } else if (sellayout == 1) {
-        show_double_layout(bwindows, winh, winw);
-    } else if (sellayout == 2) {
+void show_layout(int winh, int winw) {
+    if (App.layout == 0) {
+        show_monolithic_layout(App.bwindows, winh, winw);
+    } else if (App.layout == 1) {
+        show_double_layout(App.bwindows, winh, winw);
+    } else if (App.layout == 2) {
 
     }
 }
@@ -168,78 +175,91 @@ int main() {
     TB_system_error = TBSE_OK;
 
     // Structs
-    bwindows = ecalloc(MAX_WINDOWS, sizeof(Buffer_window*));
+    App.bwindows = ecalloc(MAX_WINDOWS, sizeof(Buffer_window*));
 
     // Setup layouts
-    int editor_layout = 1; // 0 is monolithic, 1 is double & 2 is four
+    App.layout = 1; // 0 is monolithic, 1 is double & 2 is four
 
-    bwindows[TWINCOM] = bwindow_create();
-    bwindows[TWINFILE] = bwindow_create();
-    bwindows[TWINCOMINPUT] = bwindow_create();
+    App.bwindows[TWINCOM] = bwindow_create();
+    App.bwindows[TWINFILE] = bwindow_create();
+    App.bwindows[TWINCOMINPUT] = bwindow_create();
 
-    for (int i = TWIN4; i < MAX_WINDOWS; i++) {
-        bwindows[i] = bwindow_create();
-        bwindows[i]->curses_window = newwin(1, 1, 0, 0);
+    App.bwindows[TWINCOM]->win_id = TWINCOM;
+    App.bwindows[TWINFILE]->win_id = TWINFILE;
+    App.bwindows[TWINCOMINPUT]->win_id = TWINCOMINPUT;
+
+    fbw_start(App.bwindows[TWINFILE]->buf_id);
+
+    for (int i = MAX_WINDOWS - 1; i >= TWIN4; i--) {
+        Buffer_window* win = bwindow_create();
+        win->curses_window = newwin(1, 1, 0, 0);
+        win->win_id = i;
+        fbw_add_entry(win->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size, &i);
+        fbw_mark_bound(win->buf_id, i);
+        App.bwindows[i] = win;
     }
 
-    show_layout(editor_layout, winh, winw);
+    show_layout(winh, winw);
 
-    int selected_window = TWIN1;
-    int last_selected_window = TWIN1;
-    getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
+    App.selwin = TWIN1;
+    App.last_selwin = TWIN1;
+    getbegyx(App.bwindows[App.selwin]->curses_window, selwiny, selwinx);
 
-    fbw_start(bwindows[TWINFILE]->buf_id);
-
-    fbw_add_entry(bwindows[TWIN4]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
-    fbw_add_entry(bwindows[TWIN3]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
-    fbw_add_entry(bwindows[TWIN2]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
-    fbw_add_entry(bwindows[TWIN1]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
+    /*fbw_add_entry(App.bwindows[TWIN4]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
+    fbw_add_entry(App.bwindows[TWIN3]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
+    fbw_add_entry(App.bwindows[TWIN2]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
+    fbw_add_entry(App.bwindows[TWIN1]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);*/
 
     /*Wide_string_list* test = command_parse(L"open \"D:/c/proj/ctez\"", 22); // with terminator
     wstrlist_debug_print(test);
     wstrlist_free(test);*/
 
     refresh();
-    bool is_running = true;
-    while (is_running) {
+    App.is_running = true;
+    while (App.is_running) {
         platform_sleep(5);
 
-        Buffer_window* curwin = bwindows[selected_window];
+        Buffer_window* curwin = App.bwindows[App.selwin];
         int keypress = getch();
         /*if (keypress != -1) {
             printf("%d\n", keypress);
         }*/
 
-        if (keypress == 27) {
-            is_running = false;
+        if (keypress == 27) { // We will eventually change this to a command
+            App.is_running = false;
         } else if ( keypress == KEY_RESIZE ) {
             resize_term(0, 0);
             getmaxyx(stdscr, winh, winw);
 
-            show_layout(editor_layout, winh, winw);
-            getbegyx(bwindows[selected_window]->curses_window, selwiny, selwinx);
+            show_layout(winh, winw);
+            getbegyx(curwin->curses_window, selwiny, selwinx);
 
             refresh();
         } else if (keypress == KEY_F(1)) {
-            selected_window++;
-            if (selected_window >= MAX_WINDOWS) selected_window = 0;
-            if (editor_layout == 0) {
-                if ((selected_window == TWIN2)
-                 || (selected_window == TWIN3)
-                 || (selected_window == TWIN4)) selected_window = TWIN1;
-            } else if (editor_layout == 1) {
-                if ((selected_window == TWIN3)
-                 || (selected_window == TWIN4)) selected_window = TWIN2;
+            App.selwin++;
+            if (App.selwin >= MAX_WINDOWS) App.selwin = 0;
+            if (App.layout == 0) {
+                if ((App.selwin == TWIN2)
+                 || (App.selwin == TWIN3)
+                 || (App.selwin == TWIN4)) App.selwin = TWIN1;
+            } else if (App.layout == 1) {
+                if ((App.selwin == TWIN3)
+                 || (App.selwin == TWIN4)) App.selwin = TWIN2;
             }
-            curwin = bwindows[selected_window];
+            curwin = App.bwindows[App.selwin];
             getbegyx(curwin->curses_window, selwiny, selwinx);
             bwindow_buf_set_flags_on(curwin, TB_UPDATED);
         } else if (keypress == KEY_F(2)) {
-            /*Text_buffer* tbuf = &TB_system.buffers[curwin->buf_id];
+            /*printf("%d\n", fbw_find_entry(curwin->buf_id));
+            Text_buffer* tbuf = &TB_system.buffers[curwin->buf_id];
             int pos = tbuffer_find_line(tbuf, 3);
             if (pos != -1) {
                 tbuffer_move_cursor_to_pos(tbuf, pos);
             }*/
+            //fbw_mark_bound(App.bwindows[TWIN3]);
+        } else if (keypress == KEY_F(3)) {
+
+            tbuffer_insert_formatted_bypass(&TB_system.buffers[curwin->buf_id], L"%d HOLA %d %d TEST ", 3, 4, 5);
         }
 
         //mvprintw(winh-1, 0, "");
@@ -251,10 +271,10 @@ int main() {
         bwindow_handle_keypress(curwin, keypress);
         for (int i = 0; i < MAX_WINDOWS; i++) {
             // TODO: Do not update windows that are outside the selected_layout
-            if (selected_window == i) {
-                bwindow_update(bwindows[i], winh, &cursorx, &cursory, true);
+            if (App.selwin == i) {
+                bwindow_update(App.bwindows[i], winh, &cursorx, &cursory, true);
             } else {
-                bwindow_update(bwindows[i], winh, NULL, NULL, false);
+                bwindow_update(App.bwindows[i], winh, NULL, NULL, false);
             }
         }
 

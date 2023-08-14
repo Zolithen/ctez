@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <limits.h>
 
+#include "app.h"
 #include "command.h"
 
 #include "types.h"
@@ -86,7 +87,7 @@ void command_execute(Wide_string_list* com) {
             ts_free_buffer(bwindows[chosen_buffer]->buf_id);
             bwindows[chosen_buffer]->buf_id = id;
             bwindow_buf_set_flags_on(bwindows[chosen_buffer], TB_UPDATED);*/
-            fbw_add_entry(id, file_name.str, file_name.size);
+            fbw_add_entry(id, file_name.str, file_name.size, NULL);
 
         // TODO: consider making an alternative version that only takes the window ID (requires interaction with the FBW, select the buffer & enter)
         } else if (wstrcmp(command.str, L"bind", command.size, 5)) {
@@ -105,13 +106,17 @@ void command_execute(Wide_string_list* com) {
 
             if (comexpect_buffer_unbound(bufid)) return;
 
-            bwindows[TWIN(winid)]->buf_id = bufid;
-            bwindow_buf_set_flags_on(bwindows[TWIN(winid)], TB_UPDATED);
+            // When we bind a buffer to a window, we expect the window to be already bound to another buffer. So we update the fbw entry
+            fbw_mark_unbound(App.bwindows[TWIN(winid)]->buf_id);
+
+            App.bwindows[TWIN(winid)]->buf_id = bufid;
+            fbw_mark_bound(bufid, TWIN(winid));
+            bwindow_buf_set_flags_on(App.bwindows[TWIN(winid)], TB_UPDATED);
 
         } else if (wstrcmp(command.str, L"new", command.size, 4)) {
 
             TBUFID id = tsFILE_new();
-            fbw_add_entry(id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
+            fbw_add_entry(id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size, NULL);
 
         } else if (wstrcmp(command.str, L"save", command.size, 5)) {
 
@@ -125,16 +130,16 @@ void command_execute(Wide_string_list* com) {
             tsFILE_save(bufid); // TODO: Save error reporting
             if (TB_system_error != TBSE_OK) {
                 if (TB_system_error == TBSE_INVALID_PATH) {
-                    bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_PATH);
+                    print_twincom(STR_COMMSG_INVALID_PATH);
                 }
 
                 TB_system_error = TBSE_OK;
                 return;
             }
 
-            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_SAVED_FILE);
+            print_twincom(STR_COMMSG_SAVED_FILE);
         } else {
-            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_COMMAND);
+            print_twincom(STR_COMMSG_INVALID_COMMAND);
             return;
         }
     } else {
@@ -152,7 +157,7 @@ bool comexpect_args(Wide_string_list* com, int numargs) {
         msg.size = chars_to_alloc;
         msg.str = emalloc(chars_to_alloc * sizeof(wchar_t));
         _snwprintf_s(msg.str, chars_to_alloc, chars_to_alloc - 1, STR_COMMSG_NEED_EXACTARGS.str, numargs);
-        bwindow_buf_insert_text(bwindows[TWINCOM], msg);
+        print_twincom(msg);
         free(msg.str);
         return true;
     }
@@ -165,7 +170,7 @@ bool comexpect_argtype(Wide_string_list* com, u32 argnum, Command_argument_type 
         if (wstrisnum(temp.str, temp.size)) {
             return false;
         } else {
-            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGTYPE);
+            print_twincom(STR_COMMSG_INVALID_ARGTYPE);
             return true;
         }
     }
@@ -177,7 +182,7 @@ bool comexpect_argrange(Wide_string_list* com, u32 argnum, int minimum, int maxi
     if (((u32)minimum <= tempnum) && (tempnum <= (u32)maximum)) {
         return false;
     } else {
-        bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+        print_twincom(STR_COMMSG_INVALID_ARGRANGE);
         return true;
     }
 }
@@ -188,13 +193,13 @@ bool comexpect_false_in_array(Wide_string_list* com, u32 argnum, bool* arr, u32 
 
     if (tempnum < arrsize) {
         if (arr[tempnum]) {
-            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+            print_twincom(STR_COMMSG_INVALID_ARGRANGE);
             return true;
         } else {
             return false;
         }
     } else {
-        bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+        print_twincom(STR_COMMSG_INVALID_ARGRANGE);
         return true;
     }
 }
@@ -205,26 +210,26 @@ bool comexpect_true_in_array(Wide_string_list* com, u32 argnum, bool* arr, u32 a
 
     if (tempnum < arrsize) {
         if (!arr[tempnum]) {
-            bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+            print_twincom(STR_COMMSG_INVALID_ARGRANGE);
             return true;
         } else {
             return false;
         }
     } else {
-        bwindow_buf_insert_text(bwindows[TWINCOM], STR_COMMSG_INVALID_ARGRANGE);
+        print_twincom(STR_COMMSG_INVALID_ARGRANGE);
         return true;
     }
 }
 
 bool comexpect_buffer_unbound(TBUFID bufid) {
     for (int i = TWIN4; i <= TWIN1; i++) {
-        if (bwindows[i]->buf_id == bufid) {
+        if (App.bwindows[i]->buf_id == bufid) {
             Wide_string msg = { 0 };
             int chars_to_alloc = _scwprintf(STR_COMMSG_BUFFER_ALREADY_BOUND.str, i) + 1; // _scwprintf doesn't count the terminating char
             msg.size = chars_to_alloc;
             msg.str = emalloc(chars_to_alloc * sizeof(wchar_t));
             _snwprintf_s(msg.str, chars_to_alloc, chars_to_alloc - 1, STR_COMMSG_BUFFER_ALREADY_BOUND.str, (int)(i - NUMBER_OF_SYSTEM_WINDOWS + 1));
-            bwindow_buf_insert_text(bwindows[TWINCOM], msg);
+            print_twincom(msg);
             free(msg.str);
             return true;
         }
@@ -242,7 +247,7 @@ void comerror_file_not_found(Wide_string* file_name) {
         msg.str = wstrcat(s1, L"\n", s1_size, 2, NULL);
         msg.size = s1_size + 1;
 
-        bwindow_buf_insert_text(bwindows[TWINCOM], msg);
+        print_twincom(msg);
         free(msg.str);
         free(s1);
     }
@@ -253,6 +258,6 @@ void comerror_file_invalid() {
         Wide_string msg = { 0 };
         msg.str = L"File invalid\n";
         msg.size = 14;
-        bwindow_buf_insert_text(bwindows[TWINCOM], msg);
+        print_twincom(msg);
     }
 }

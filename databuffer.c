@@ -33,6 +33,17 @@ void databuffer_add_bytes(Data_buffer* buf, u8* bytes, size_t amount) {
     buf->cursize += amount;
 }
 
+u8 databuffer_get_byte(Data_buffer* buf, u64 pos) {
+    if (pos >= buf->maxsize) return 0;
+    return buf->data[pos];
+}
+
+bool databuffer_set_byte(Data_buffer* buf, u64 pos, u8 byt) {
+    if (pos >= buf->maxsize) return false;
+    buf->data[pos] = byt;
+    return true;
+}
+
 void databuffer_reset(Data_buffer* buf) {
     memset(buf->data, 0, buf->cursize);
 }

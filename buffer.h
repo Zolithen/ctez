@@ -3,6 +3,7 @@
 
 #include <curses.h>
 #include <stdlib.h>
+#include <stdarg.h>
 
 #include "types.h"
 #include "wstr.h"
@@ -57,10 +58,14 @@ Text_buffer* tbuffer_from_databuffer(Data_buffer* dat); /* Creates a Text_buffer
 
 /* Modifies the buffer */
 bool tbuffer_insert(Text_buffer* buf, wchar_t c); /* Types a character where the cursor is */
-bool tbuffer_insert_string_bypass(Text_buffer* buf, wchar_t* str, int sz); /* Bypasses writtable tag */
+void tbuffer_insert_bypass(Text_buffer* buf, wchar_t c); /* Ignores the TB_WRITTABLE tag */
+void tbuffer_insert_string_bypass(Text_buffer* buf, wchar_t* str, int sz); /* Bypasses writtable tag */
+void tbuffer_insert_formatted_bypass(Text_buffer* buf, const wchar_t* formatstring, ...);
+bool tbuffer_backspace(Text_buffer* buf); /* Backspaces in the current cursor position */
+void tbuffer_clear(Text_buffer* buf); /* Sets the whole buffer to 0s */
+
 int tbuffer_move_cursor(Text_buffer* buf, int amount); /* Moves the cursor amount characters backwards(negative amount) or forwards (positive amount)*/
 void tbuffer_move_cursor_to_pos(Text_buffer* buf, int pos); /* Moves the cursor to the given pos in the text buffer */
-void tbuffer_clear(Text_buffer* buf); /* Sets the whole buffer to 0s */
 
 /* Necessary memory management */
 void tbuffer_resize(Text_buffer* buf); /* Doubles the storage available in the buffer */
@@ -121,14 +126,13 @@ void tsFILE_save(TBUFID buf);
 */
 
 typedef struct {
+    WINDOW* curses_window;
     Lines_buffer* curl;
     Lines_buffer* prevl;
-    WINDOW* curses_window;
     TBUFID buf_id;
+    int win_id;
     u8 flags; // 1's bit visible
 } Buffer_window;
-
-Buffer_window** bwindows;
 
 typedef enum {
     BW_VISIBLE = 1,
@@ -148,14 +152,11 @@ void bwindow_update(Buffer_window* w, int winh, int* cursorx, int* cursory, bool
     File buffer window functions
 */
 
-typedef struct {
-    Wide_string label;
-    Wide_string file_name;
-    TBUFID id;
-} FBW_entry;
-
-void fbw_start(TBUFID fbw);
+void fbw_start(TBUFID fb);
 void fbw_shutdown();
-u32 fbw_add_entry(TBUFID newbufid, const wchar_t* path, u32 pathsz); /* Adds an entry into the file buffer window */
+u32 fbw_add_entry(TBUFID newbufid, const wchar_t* path, u32 pathsz, int* winid); /* Adds an entry into the file buffer window */
+int fbw_find_entry(TBUFID id); /* Finds the index to the entry that has the given ID. Returns -1 if it isn't found */
+void fbw_mark_bound(TBUFID id, int win_id);
+void fbw_mark_unbound(TBUFID id);
 
 #endif // BUFFER_H_INCLUDED
