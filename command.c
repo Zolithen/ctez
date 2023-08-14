@@ -57,6 +57,7 @@ bind <window number> <buffer id>
 save <buffer id>
 new
 
+bindread <window number> <buffer id> // Maybe fuse it into the bind command?
 getpath <buffer id>
 saveall
 filebind <file path> <buffer id>
@@ -104,13 +105,14 @@ void command_execute(Wide_string_list* com) {
             u32 winid = wstrtonum(_winid.str, _winid.size);
             u32 bufid = wstrtonum(_bufid.str, _bufid.size);
 
-            if (comexpect_buffer_unbound(bufid)) return;
+            if (comexpect_buffer_unbound(bufid)) return; // TODO: Make it so we can change the window a buffer is bound to easily (like removing this
+                                                         // and adding unbinding code)
 
             // When we bind a buffer to a window, we expect the window to be already bound to another buffer. So we update the fbw entry
-            fbw_mark_unbound(App.bwindows[TWIN(winid)]->buf_id);
+            fbw_mark_unbind(App.bwindows[TWIN(winid)]->buf_id);
 
             App.bwindows[TWIN(winid)]->buf_id = bufid;
-            fbw_mark_bound(bufid, TWIN(winid));
+            fbw_mark_bind(bufid, TWIN(winid));
             bwindow_buf_set_flags_on(App.bwindows[TWIN(winid)], TB_UPDATED);
 
         } else if (wstrcmp(command.str, L"new", command.size, 4)) {
@@ -228,7 +230,7 @@ bool comexpect_buffer_unbound(TBUFID bufid) {
             int chars_to_alloc = _scwprintf(STR_COMMSG_BUFFER_ALREADY_BOUND.str, i) + 1; // _scwprintf doesn't count the terminating char
             msg.size = chars_to_alloc;
             msg.str = emalloc(chars_to_alloc * sizeof(wchar_t));
-            _snwprintf_s(msg.str, chars_to_alloc, chars_to_alloc - 1, STR_COMMSG_BUFFER_ALREADY_BOUND.str, (int)(i - NUMBER_OF_SYSTEM_WINDOWS + 1));
+            _snwprintf_s(msg.str, chars_to_alloc, chars_to_alloc - 1, STR_COMMSG_BUFFER_ALREADY_BOUND.str, (int)(MAX_WINDOWS - i));
             print_twincom(msg);
             free(msg.str);
             return true;

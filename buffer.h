@@ -141,7 +141,7 @@ typedef enum {
 
 Buffer_window* bwindow_create();
 void bwindow_assign_tbuffer(Buffer_window* w, Text_buffer* b);
-void bwindow_handle_keypress(Buffer_window* w, int keypress);
+void bwindow_handle_keypress(Buffer_window* w, int keypress, u64 key_mods);
 void bwindow_buf_set_flags_on(Buffer_window* w, u8 flags);
 void bwindow_buf_set_flags_off(Buffer_window* w, u8 flags);
 void bwindow_buf_insert_text(Buffer_window* w, Wide_string str);
@@ -156,7 +156,7 @@ void fbw_start(TBUFID fb);
 void fbw_shutdown();
 u32 fbw_add_entry(TBUFID newbufid, const wchar_t* path, u32 pathsz, int* winid); /* Adds an entry into the file buffer window */
 int fbw_find_entry(TBUFID id); /* Finds the index to the entry that has the given ID. Returns -1 if it isn't found */
-void fbw_mark_bound(TBUFID id, int win_id);
-void fbw_mark_unbound(TBUFID id);
+void fbw_mark_bind(TBUFID id, int win_id);
+void fbw_mark_unbind(TBUFID id);
 
 #endif // BUFFER_H_INCLUDED

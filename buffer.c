@@ -615,14 +615,18 @@ Buffer_window* bwindow_create() {
     return b;
 }
 
-void bwindow_handle_keypress(Buffer_window* w, int key) {
+void bwindow_handle_keypress(Buffer_window* w, int key, u64 key_mods) {
 
+    // 443 -> ctrl left, 444 -> ctrl right, 480 -> ctrl up, 481 -> ctrl down
     Text_buffer* buf = &TB_system.buffers[w->buf_id];
     bool is_comline = IS_FLAG_ON(buf->flags, TB_COMLINE);
     bool is_writtable = IS_FLAG_ON(buf->flags, TB_WRITTABLE);
+
+    // The checks for mod keys inside key checks are because it's possible for modified keys to overlap with special keys (ej.: ctrl+h = backspace)
     switch (key) {
     case 13:
     case PADENTER:
+        if ( (key_mods & (PDC_KEY_MODIFIER_CONTROLALT)) != 0) break;
         if (is_comline) {
             Wide_string command = { 0 };
             command.str = wstrcat_second_no_terminator(
@@ -642,17 +646,19 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
         break;
 
     case 9:
+        if ( (key_mods & (PDC_KEY_MODIFIER_CONTROLALT)) != 0) break;
         if ((!is_comline) && (is_writtable)) tbuffer_insert(buf, '\t');
         break;
 
     case 8: // Backspace
+        if ( (key_mods & (PDC_KEY_MODIFIER_CONTROLALT)) != 0) break;
         if (is_writtable) tbuffer_backspace(buf);
         break;
 
-    case PADSTAR: if (is_writtable) tbuffer_insert(buf, '*'); break;
-    case PADSLASH: if (is_writtable) tbuffer_insert(buf, '/'); break;
-    case PADPLUS: if (is_writtable) tbuffer_insert(buf, '+'); break;
-    case PADMINUS: if (is_writtable) tbuffer_insert(buf, '-'); break;
+    case PADSTAR: if ( (key_mods & (PDC_KEY_MODIFIER_CONTROLALT)) != 0) break; if (is_writtable) tbuffer_insert(buf, '*'); break;
+    case PADSLASH: if ( (key_mods & (PDC_KEY_MODIFIER_CONTROLALT)) != 0) break; if (is_writtable) tbuffer_insert(buf, '/'); break;
+    case PADPLUS: if ( (key_mods & (PDC_KEY_MODIFIER_CONTROLALT)) != 0) break; if (is_writtable) tbuffer_insert(buf, '+'); break;
+    case PADMINUS: if ( (key_mods & (PDC_KEY_MODIFIER_CONTROLALT)) != 0) break; if (is_writtable) tbuffer_insert(buf, '-'); break;
 
     case KEY_LEFT:
         tbuffer_move_cursor(buf, -1);
@@ -697,6 +703,32 @@ void bwindow_handle_keypress(Buffer_window* w, int key) {
         }
         break;
 
+    case CTL_LEFT:
+        if (wchrissymbol(buf->before_cursor[buf->bc_current_char - 1])) {
+            while (buf->bc_current_char != 0) {
+                if (!wchrissymbol(buf->before_cursor[buf->bc_current_char - 1])) break;
+                tbuffer_move_cursor(buf, -1);
+            }
+        }
+        while (buf->bc_current_char != 0) {
+            if (wchrissymbol(buf->before_cursor[buf->bc_current_char - 1])) break;
+            tbuffer_move_cursor(buf, -1);
+        }
+        break;
+
+    case CTL_RIGHT:
+        if (wchrissymbol(buf->after_cursor[buf->ac_current_char + 1])) {
+            while (buf->ac_current_char != buf->b_size - 1) {
+                if (!wchrissymbol(buf->after_cursor[buf->ac_current_char + 1])) break;
+                tbuffer_move_cursor(buf, 1);
+            }
+        }
+        while (buf->ac_current_char != buf->b_size - 1) {
+            if (wchrissymbol(buf->after_cursor[buf->ac_current_char + 1])) break;
+            tbuffer_move_cursor(buf, 1);
+        }
+        break;
+
     }
 
     if (((key >= 32 && key <= 0x7E) || (key >= 0xA1 && key <= 0xFF)) && (is_writtable))  {
@@ -727,7 +759,8 @@ void bwindow_buf_insert_text(Buffer_window* w, Wide_string str) {
 void bwindow_update(Buffer_window* w, int winh, int* cursorx, int* cursory, bool is_selected_window) {
     Text_buffer* curbuffer = &(TB_system.buffers[w->buf_id]);
     if (IS_FLAG_ON(curbuffer->flags, TB_UPDATED)) {
-        SET_FLAG_OFF(curbuffer->flags, TB_UPDATED);
+        SET_FLAG_OFF(curbuffer->flags, TB_UPDATED); // TODO: If we want to make multiple windows being bound to one buffer we have to do this at the end
+                                                    //       of the main loop
         /* We return the current array of lines from the function to free them after we have already set the new lines.
            This is because addwstr apparently needs the pointer alive and doesn't copy the contents of the string? Idk */
         tbuffer_render(w->curses_window, curbuffer, w->prevl, cursory, cursorx);
@@ -803,7 +836,8 @@ int fbw_find_entry(TBUFID id) {
     return -1;
 }
 
-void fbw_mark_bound(TBUFID id, int win_id) {
+// TODO: check bounds
+void fbw_mark_bind(TBUFID id, int win_id) {
     Text_buffer* buf = &TB_system.buffers[App.bwindows[TWINFILE]->buf_id];
     int entry_num = fbw_find_entry(id);
     if (entry_num == -1) return;
@@ -819,7 +853,7 @@ void fbw_mark_bound(TBUFID id, int win_id) {
     buf->flags |= TB_UPDATED;
 }
 
-void fbw_mark_unbound(TBUFID id) {
+void fbw_mark_unbind(TBUFID id) {
     Text_buffer* buf = &TB_system.buffers[App.bwindows[TWINFILE]->buf_id];
     int entry_num = fbw_find_entry(id);
     if (entry_num == -1) return;

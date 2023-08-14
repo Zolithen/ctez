@@ -1,5 +1,6 @@
 #include <string.h>
 #include <math.h>
+#include <stdio.h>
 
 #include "wstr.h"
 
@@ -20,6 +21,33 @@ void wstr_start() {
     GSTRINIT(STR_COMMSG_BUFFER_ALREADY_BOUND, L"Buffer is already bound to window %d\n");
 
     GSTRINIT(STR_COMMSG_SAVED_FILE, L"File has been saved\n");
+}
+
+bool wchrissymbol(wchar_t c) {
+    return ((c == L' ') ||
+            (c == L'(') ||
+            (c == L')') ||
+            (c == L'{') ||
+            (c == L'}') ||
+            (c == L'\'') ||
+            (c == L'"') ||
+            (c == L'+') ||
+            (c == L'-') ||
+            (c == L'*') ||
+            (c == L'/') ||
+            (c == L'\\') ||
+            (c == L'%') ||
+            (c == L'^') ||
+            (c == L'&') ||
+            (c == L'!') ||
+            (c == L'|') ||
+            (c == L',') ||
+            (c == L'.') ||
+            (c == L'=') ||
+            (c == L'[') ||
+            (c == L']') ||
+            (c == L';')
+    );
 }
 
 /*
@@ -78,6 +106,19 @@ wchar_t* wstrfilefrompath(const wchar_t* str, u32 sz, u32* ressize) {
     wchar_t* newstr = ecalloc(*ressize, sizeof(wchar_t));
     memcpy(newstr, secstr, (*ressize)*sizeof(wchar_t));
     return newstr;
+}
+
+wchar_t* wstrformat(int* ressize, const wchar_t* formatstring, ...) {
+    va_list args;
+    va_start(args, formatstring);
+
+    int chars_to_alloc = _vscwprintf(formatstring, args) + 1; // _vscwprintf doesn't count the terminating char
+    if (ressize != NULL) *ressize = chars_to_alloc;
+    wchar_t* res = emalloc(chars_to_alloc * sizeof(wchar_t));
+    _vsnwprintf_s(res, chars_to_alloc, chars_to_alloc - 1, formatstring, args);
+
+    va_end(args);
+    return res;
 }
 
 bool wstrisnum(const wchar_t* str, u32 sz) {

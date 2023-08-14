@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdarg.h>
 
 #include "types.h"
 
@@ -20,6 +21,9 @@ wchar_t int_to_wstr_char_array[10];
 
 void wstr_start();
 
+// Wide char functions
+bool wchrissymbol(wchar_t c);
+
 // Wide string functions
 u8*      wstrdgr(const wchar_t* str, u32  sz); /* Turns a wstr (that only consists of ASCII chars) into a normal string. String char size is the same */
 wchar_t* wstrcat_in_tbuffer_render(const wchar_t* first, const wchar_t* second, int szfirst, int szsecond);
@@ -27,6 +31,7 @@ wchar_t* wstrcat(const wchar_t* first, const wchar_t* second, u32 szfirst, u32 s
 wchar_t* wstrcat_second_no_terminator(const wchar_t* first, const wchar_t* second, u32 szfirst, u32 szsecond, u32* ressize);
 wchar_t* wstrfromnum(u32 num, u32* ressize); /* Creates an string from a number */
 wchar_t* wstrfilefrompath(const wchar_t* str, u32 sz, u32* ressize); /* Get the file name out of a path */
+wchar_t* wstrformat(int* ressize, const wchar_t* formatstring, ...); /* Returns the formatted string */
 bool     wstrcmp(const wchar_t* first, const wchar_t* second, u32 szfirst, u32 szsecond); /* Returns if both strings are the same */
 bool     wstrisnum(const wchar_t* str, u32 sz); /* Returns true if str represents a number */
 u32      wstrtonum(const wchar_t* str, u32 sz); /* Turn a wide string into a number */

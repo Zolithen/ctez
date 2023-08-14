@@ -29,11 +29,27 @@ void print_twincom(Wide_string msg) {
     bwindow_buf_insert_text(App.bwindows[TWINCOM], msg);
 }
 
+void printf_twincom(const wchar_t* formatstring, ...) {
+    va_list args;
+    va_start(args, formatstring);
+
+    Wide_string msg = { 0 };
+    int chars_to_alloc = _vscwprintf(formatstring, args) + 1; // _vscwprintf doesn't count the terminating char
+    msg.size = chars_to_alloc;
+    msg.str = emalloc(chars_to_alloc * sizeof(wchar_t));
+    _vsnwprintf_s(msg.str, chars_to_alloc, chars_to_alloc - 1, formatstring, args);
+    tbuffer_insert_string_bypass(&TB_system.buffers[App.bwindows[TWINCOM]->buf_id], msg.str, msg.size);
+
+    free(msg.str);
+    va_end(args);
+}
+
 int start_display() {
     initscr();
     noecho();
     raw();
     keypad(stdscr, true);
+    //PDC_return_key_modifiers(true);
     //wtimeout(stdscr, 1); // May be needed in other platforms
     wtimeout(stdscr, 0);
     curs_set(2);
@@ -56,6 +72,8 @@ void show_bottom_of_screen(Buffer_window** wins, int winh, int winw) {
     delwin(wins[TWINCOM]->curses_window);
     wins[TWINFILE]->flags |= BW_VISIBLE;
     delwin(wins[TWINFILE]->curses_window);
+    wins[TWINCOMINPUT]->flags |= BW_VISIBLE;
+    delwin(wins[TWINCOMINPUT]->curses_window);
 
     if (winw % 2 == 0) {
         wins[TWINCOM]->curses_window = newwin(BOTTOM_SECTION_HEIGHT - 3, winw/2 - 1, winh - BOTTOM_SECTION_HEIGHT + 1, 0);
@@ -195,7 +213,7 @@ int main() {
         win->curses_window = newwin(1, 1, 0, 0);
         win->win_id = i;
         fbw_add_entry(win->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size, &i);
-        fbw_mark_bound(win->buf_id, i);
+        fbw_mark_bind(win->buf_id, i);
         App.bwindows[i] = win;
     }
 
@@ -204,11 +222,6 @@ int main() {
     App.selwin = TWIN1;
     App.last_selwin = TWIN1;
     getbegyx(App.bwindows[App.selwin]->curses_window, selwiny, selwinx);
-
-    /*fbw_add_entry(App.bwindows[TWIN4]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
-    fbw_add_entry(App.bwindows[TWIN3]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
-    fbw_add_entry(App.bwindows[TWIN2]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);
-    fbw_add_entry(App.bwindows[TWIN1]->buf_id, STR_SYS_NEW_BUFFER.str, STR_SYS_NEW_BUFFER.size);*/
 
     /*Wide_string_list* test = command_parse(L"open \"D:/c/proj/ctez\"", 22); // with terminator
     wstrlist_debug_print(test);
@@ -222,12 +235,16 @@ int main() {
         Buffer_window* curwin = App.bwindows[App.selwin];
         int keypress = getch();
         /*if (keypress != -1) {
+            printf_twincom(L"key %d,\n", keypress);
+        }*/
+        u64 key_mods = PDC_get_key_modifiers();
+        /*if (keypress != -1) {
             printf("%d\n", keypress);
         }*/
 
         if (keypress == 27) { // We will eventually change this to a command
             App.is_running = false;
-        } else if ( keypress == KEY_RESIZE ) {
+        } else if ( keypress == KEY_RESIZE ) { // TODO: there's stil a memory leak? (if there is, it's minor)
             resize_term(0, 0);
             getmaxyx(stdscr, winh, winw);
 
@@ -268,7 +285,7 @@ int main() {
             curbuffer->bc_current_char + curbuffer->b_size - curbuffer->ac_current_char
         );*/
 
-        bwindow_handle_keypress(curwin, keypress);
+        bwindow_handle_keypress(curwin, keypress, key_mods);
         for (int i = 0; i < MAX_WINDOWS; i++) {
             // TODO: Do not update windows that are outside the selected_layout
             if (App.selwin == i) {
@@ -278,6 +295,7 @@ int main() {
             }
         }
 
+        //if (cursory == 0) cursory = ;
         move(selwiny + cursory, selwinx + cursorx);
         refresh();
     }
