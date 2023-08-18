@@ -56,14 +56,6 @@ open <file>
 bind <window number> <buffer id>
 save <buffer id>
 new
-
-bindread <window number> <buffer id> // Maybe fuse it into the bind command?
-getpath <buffer id>
-saveall
-filebind <file path> <buffer id>
-
-setprojectdir <dir path> Still not sure how to handle this
-cd <path>
 */
 void command_execute(Wide_string_list* com) {
     //wstrlist_debug_print(com);

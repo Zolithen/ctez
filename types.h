@@ -28,6 +28,8 @@ typedef long i64;
 #define TWIN4 MAX_WINDOWS - 4
 #define TWIN(n) MAX_WINDOWS - (n)
 
+// Buffer window IDs are shown to the user as their TWIN number. Ex: ID MAX_WINDOWS - 1 is show to the user as 1 instead of 6, to make it easier to read or smth
+
 #define PDC_KEY_MODIFIER_CONTROLALT PDC_KEY_MODIFIER_ALT | PDC_KEY_MODIFIER_CONTROL
 
 #endif // TYPES_H_INCLUDED

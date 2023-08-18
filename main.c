@@ -1,3 +1,39 @@
+/*
+    TODO:
+    - Better API for commands?
+
+    - Support for multiple file encodings
+
+    - Showing the name of the buffer in the window or something to make it easy to see which file you are editing (fbw kinda sucks)
+        - Alternate between "all" mode & "bound" mode in fbw?
+
+    - ctrl-c to select command line and ctrl-c to go back? Ditch function keys for navigation?
+    - emacs style navigation (ctrl-f, ctrl-b, ctrl-n, ctrl-p instead of right, left, down, up) or displaced arrow keys (ctrl-l, ctrl-j, ctrl-k, ctrl-i)
+    - Copy & paste.
+    - Commands for navigation (goto, start, end, idk)
+    - Shortcuts for commands
+    - Shortcut for selecting a whole line
+    - Add way of changing layout
+
+    -- For the future:
+    - Search & replace
+    - Syntax highlight
+    - Custom layouts
+    - "Symbols" mode for fbw?
+
+    Threaded file reading would only be useful if we wanted to load huge files, thing which IDK if to support
+
+    save <buffer name>
+    bindread <window number> <buffer id> // Maybe fuse it into the bind command?
+    getpath <buffer id>
+    saveall
+    filebind <file path> <buffer id>
+
+    setprojectdir <dir path> // Still not sure how to handle this
+    cd <path>
+
+*/
+
 #include <curses.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -24,7 +60,6 @@ void platform_sleep(int milisecs) { // You can change this one function to the p
     Sleep(milisecs); // Windows
 }
 
-// TODO: Add printf variant
 void print_twincom(Wide_string msg) {
     bwindow_buf_insert_text(App.bwindows[TWINCOM], msg);
 }
@@ -245,6 +280,7 @@ int main() {
         if (keypress == 27) { // We will eventually change this to a command
             App.is_running = false;
         } else if ( keypress == KEY_RESIZE ) { // TODO: there's stil a memory leak? (if there is, it's minor)
+            // TODO: Make it so if we resize the window to be less height than BOTTOM_SECTION_HEIGHT we are put into a safe mode so it doesn't crash
             resize_term(0, 0);
             getmaxyx(stdscr, winh, winw);
 
@@ -276,7 +312,7 @@ int main() {
             //fbw_mark_bound(App.bwindows[TWIN3]);
         } else if (keypress == KEY_F(3)) {
 
-            tbuffer_insert_formatted_bypass(&TB_system.buffers[curwin->buf_id], L"%d HOLA %d %d TEST ", 3, 4, 5);
+            //tbuffer_insert_formatted_bypass(&TB_system.buffers[curwin->buf_id], L"%d H %d %d TEST ", 3, 4, 5);
         }
 
         //mvprintw(winh-1, 0, "");
@@ -287,6 +323,11 @@ int main() {
 
         bwindow_handle_keypress(curwin, keypress, key_mods);
         for (int i = 0; i < MAX_WINDOWS; i++) {
+            if (App.bwindows[i] == NULL) { // TODO: Add a macro for this probably
+                printf("FATAL: Some windows have not been initialized.\n");
+                exit(-2);
+            }
+
             // TODO: Do not update windows that are outside the selected_layout
             if (App.selwin == i) {
                 bwindow_update(App.bwindows[i], winh, &cursorx, &cursory, true);

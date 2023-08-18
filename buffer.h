@@ -38,18 +38,53 @@ typedef struct {
     int amount;
 } Lines_buffer;
 
+/* Some functions require to know if you want to do something to the before_cursor buffer or the after_cursor buffer */
 typedef enum {
     BO_BEFORE,
     BO_AFTER
 } Buffer_order;
 
 typedef enum {
-    TB_UPDATED = 1,
-    TB_WRITTABLE = 2,
+    TB_UPDATED = 1, // Has the text buffer been updated
+    TB_WRITTABLE = 2, // Is the text buffer writtable
     TB_ENDSCROLL = 4, // Should the cursor be in the end of the buffer window or in the middle
-    TB_COMLINE = 8,
-    TB_COMOUTPUT = 16
+    TB_COMLINE = 8, // Should the text buffer act like the command feedback thingy
+    TB_COMOUTPUT = 16 // Is the text buffer the input for commands
 } Text_buffer_flags;
+
+struct {
+    Text_buffer* buffers;
+    bool* free;
+    u32 current_alloc;
+} TB_system; // Do not do weird memory stuff with this outside of ts functions
+
+typedef enum {
+    TBSE_OK,
+    TBSE_ALREADY_FREE,
+    TBSE_OUT_OF_BOUNDS,
+    TBSE_FILE_NOT_FOUND,
+    TBSE_INVALID_FILE,
+    TBSE_INVALID_PATH,
+    TBSE_CANT_CREATE_FILE
+} TB_system_error_code;
+
+TB_system_error_code TB_system_error;
+
+typedef u32 TBUFID;
+
+typedef struct {
+    WINDOW* curses_window;
+    Lines_buffer* curl;
+    Lines_buffer* prevl;
+    TBUFID buf_id;
+    int win_id;
+    u8 flags; // 1's bit visible
+} Buffer_window;
+
+typedef enum {
+    BW_VISIBLE = 1,
+    BW_FILE = 2 // Is this buffer window the one for files?
+} Buffer_window_flags;
 
 /* Initializers */
 Text_buffer* tbuffer_create(int in_size);
@@ -79,36 +114,13 @@ wchar_t* tbuffer_translate_string(Text_buffer* buf, Buffer_order b, int st, int 
 int tbuffer_find_line(Text_buffer* buf, int l); /* Finds the position of the start of the l'th line*/
 int tbuffer_get_cursor_line(Text_buffer* buf); /* Finds the line the cursor is currently in */
 
-void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx); /* Renders the lines that are visible on the given window */
-
-
-
+void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx); /* Renders the lines that are visible on the given window */
 
 /*
     Buffer system functions
     Allows us to handle multiple files being opened at once, handles all memory stuff of that
     so we don't have 100 mallocs in different places
 */
-
-struct {
-    Text_buffer* buffers;
-    bool* free;
-    u32 current_alloc;
-} TB_system; // Do not do weird memory stuff with this outside of ts functions
-
-typedef enum {
-    TBSE_OK,
-    TBSE_ALREADY_FREE,
-    TBSE_OUT_OF_BOUNDS,
-    TBSE_FILE_NOT_FOUND,
-    TBSE_INVALID_FILE,
-    TBSE_INVALID_PATH,
-    TBSE_CANT_CREATE_FILE
-} TB_system_error_code;
-
-TB_system_error_code TB_system_error;
-
-typedef u32 TBUFID;
 
 void ts_start();
 void ts_shutdown();
@@ -118,26 +130,9 @@ TBUFID tsFILE_new();
 TBUFID tsFILE_open(const u8* name, u32 name_size);
 void tsFILE_save(TBUFID buf);
 
-
-
-
 /*
     Buffer window functions
 */
-
-typedef struct {
-    WINDOW* curses_window;
-    Lines_buffer* curl;
-    Lines_buffer* prevl;
-    TBUFID buf_id;
-    int win_id;
-    u8 flags; // 1's bit visible
-} Buffer_window;
-
-typedef enum {
-    BW_VISIBLE = 1,
-    BW_FILE = 2 // Is this buffer window the one for files?
-} Buffer_window_flags;
 
 Buffer_window* bwindow_create();
 void bwindow_assign_tbuffer(Buffer_window* w, Text_buffer* b);
@@ -146,7 +141,6 @@ void bwindow_buf_set_flags_on(Buffer_window* w, u8 flags);
 void bwindow_buf_set_flags_off(Buffer_window* w, u8 flags);
 void bwindow_buf_insert_text(Buffer_window* w, Wide_string str);
 void bwindow_update(Buffer_window* w, int winh, int* cursorx, int* cursory, bool is_selected_window);
-
 
 /*
     File buffer window functions

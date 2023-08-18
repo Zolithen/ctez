@@ -151,10 +151,8 @@ bool wstrcmp(const wchar_t* first, const wchar_t* second, u32 szfirst, u32 szsec
 }
 
 u8* wstrdgr(const wchar_t* str, u32 sz) {
-    const wchar_t* p = str;
-    u8* cur = (u8*)p;
     u8* res = ecalloc(sz, sizeof(u8));
-    for (u32 i = 0; i < sz; i++) res[i] = cur[2*i]; // TODO: maybe change to a cast
+    for (u32 i = 0; i < sz; i++) res[i] = (u8)str[i];
     return res;
 }
 

@@ -194,9 +194,9 @@ void tbuffer_clear(Text_buffer* buf) {
 
 /* We start iterating over chars that are near the cursor, so we find line breaks and
    get the amount of chars between them so we can render lines correctly */
-// FIXME: When the first character of a buffer is selected, the buffer renders nothing and cy, cx reset both to 0
-void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx) {
+void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx) {
 
+    WINDOW* win = bwin->curses_window;
     int winh = getmaxy(win);
     int winw = getmaxx(win);
     int center = winh % 2 == 0 ? winh/2 : (winh-1)/2;
@@ -290,11 +290,15 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
     if (lines[center] != NULL) {
         lines[center] = wstrcat_in_tbuffer_render(current_line_before, current_line_after, c_linebef_size, c_lineaf_size);
         lines_size[center] = (int)floor((c_linebef_size + c_lineaf_size)/winw);
+    } else if (buf->bc_current_char == 0) { // Extra check so that if we mess something up we can evaluate if it's useful adding another case to this
+                                            // instead of it silently working but being wrong
+        lines[center] = ecalloc(c_lineaf_size, sizeof(wchar_t));
+        memcpy(lines[center], current_line_after, sizeof(wchar_t)*c_lineaf_size);
     }
 
     // Render everything
     int centerx = 0;
-    int centery = 0; // We save centery just in case
+    int centery = center; // We save centery just in case
     werase(win);
     int wrap_line_offset = 0; //TODO: please make an actual solution
     for (int i = 0; i < winh; i++) {
@@ -305,9 +309,11 @@ void tbuffer_render(WINDOW* win, Text_buffer* buf, Lines_buffer* previous_lines,
         if (lines[i] == NULL) continue;
         if (i == center) {
             wmove(win, i+wrap_line_offset, 0);
-            waddwstr(win, current_line_before);
-            centerx = getcurx(win);
-            centery = getcury(win);
+            if (current_line_before != NULL) {
+                waddwstr(win, current_line_before);
+                centerx = getcurx(win);
+                centery = getcury(win);
+            }
         }
         wmove(win, i+wrap_line_offset, 0);
         waddwstr(win, lines[i]);
@@ -763,7 +769,7 @@ void bwindow_update(Buffer_window* w, int winh, int* cursorx, int* cursory, bool
                                                     //       of the main loop
         /* We return the current array of lines from the function to free them after we have already set the new lines.
            This is because addwstr apparently needs the pointer alive and doesn't copy the contents of the string? Idk */
-        tbuffer_render(w->curses_window, curbuffer, w->prevl, cursory, cursorx);
+        tbuffer_render(w, curbuffer, w->prevl, cursory, cursorx);
 
         if (is_selected_window) {
             // Render the line number
