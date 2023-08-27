@@ -25,6 +25,10 @@ void tbuffer_init(Text_buffer* buf, int in_size) {
     buf->flags = TB_WRITTABLE;
     buf->linked_file_path.size = 0;
     buf->linked_file_path.str = NULL;
+
+    buf->render_lines.line_amount = 0; // Setting things to 0 is not needed because we calloced the struct but it's here anyways
+    buf->render_lines.line_starts = NULL;
+    buf->abs_mark_position = -1;
 }
 
 Text_buffer* tbuffer_create(int in_size) {
@@ -35,7 +39,7 @@ Text_buffer* tbuffer_create(int in_size) {
 
 Text_buffer* tbuffer_from_databuffer(Data_buffer* dat) {
     if (dat->cursize % 2 == 1) return NULL; // wchar_t is 2 bytes, so if we have an odd numbers of bytes in dat we can't get wchar_t right
-    Text_buffer* res = emalloc(sizeof(Text_buffer));
+    Text_buffer* res = emalloc(sizeof(Text_buffer)); // TODO: Use the tbuffer_init method
     res->b_size = dat->cursize/2;
     res->before_cursor = ecalloc(res->b_size, sizeof(wchar_t));
     res->after_cursor = ecalloc(res->b_size, sizeof(wchar_t));
@@ -43,6 +47,10 @@ Text_buffer* tbuffer_from_databuffer(Data_buffer* dat) {
     res->bc_current_char = res->b_size - 1;
     res->current_chars_stored = res->b_size - 1;
     res->flags = TB_WRITTABLE | TB_UPDATED;
+
+    res->render_lines.line_amount = 0;
+    res->render_lines.line_starts = NULL;
+    res->abs_mark_position = -1;
 
     memcpy(res->before_cursor, dat->data, sizeof(wchar_t)*(res->b_size - 1));
     return res;
@@ -192,156 +200,82 @@ void tbuffer_clear(Text_buffer* buf) {
     buf->flags |= TB_UPDATED;
 }
 
-/* We start iterating over chars that are near the cursor, so we find line breaks and
-   get the amount of chars between them so we can render lines correctly */
+/* We store the positions of near newlines in a Render_lines object to render them char by char later to
+   make it easier to color them. */
 void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx) {
 
+    // TODO: Last line in the buffer doesn't get rendered
     WINDOW* win = bwin->curses_window;
     int winh = getmaxy(win);
     int winw = getmaxx(win);
     int center = winh % 2 == 0 ? winh/2 : (winh-1)/2;
     int line_offset = 0;
-    wchar_t** lines = ecalloc(winh, sizeof(wchar_t*));
-    bool*     lines_hasinit = ecalloc(winh, sizeof(bool));
-    int*      lines_size = ecalloc(winh, sizeof(int)); // Wrap size
-    int c_linebef_size = 0;
-    int start_offset = 0;
     bool endscroll = IS_FLAG_ON(buf->flags, TB_ENDSCROLL);
 
     if (endscroll) {
         center = winh - 1;
     }
 
+    // Reset the render lines
+    Render_lines* rlines = &buf->render_lines;
+    if (rlines->line_amount != winh) {
+        if (rlines->line_starts != NULL) free(rlines->line_starts);
+        rlines->line_starts = ecalloc(winh, sizeof(int));
+        rlines->line_amount = winh;
+    }
+    int i = 0;
+    for (; i < rlines->line_amount; i++) {
+        rlines->line_starts[i] = -1;
+    }
+
     // before_cursor and first part of the current line
-    for (int i = 0; i <= buf->bc_current_char; i++) {
-        if (buf->bc_current_char == 0) break;
-        if (buf->before_cursor[buf->bc_current_char - i] == '\n' ) {
-            wchar_t* str = tbuffer_translate_string(buf, BO_BEFORE, buf->bc_current_char - i + 1, buf->bc_current_char - start_offset);
-            lines[center+line_offset] = str;
-            lines_hasinit[center+line_offset] = true;
-            //buf->bc_current_char - start_offset - (buf->bc_current_char - i + 1)
-            lines_size[center+line_offset] = (int)floor((i - 1 - start_offset)/winw);
-
-            if (line_offset == 0) {
-                int a = i - 1 + start_offset;
-                if (a == -1) c_linebef_size = 1; // When backspacing a newline, the program crashed bcs c_linebef_size = -1. This should fix it
-                else c_linebef_size = a;
-            }
-
-            line_offset--;
-            start_offset = i - 1;
-        } else if (i == buf->bc_current_char) { // The first line needs special treatment bcs it's not delimited with \n
-            wchar_t* str = tbuffer_translate_string(buf, BO_BEFORE, buf->bc_current_char - i, buf->bc_current_char - start_offset);
-            lines[center+line_offset] = str;
-            lines_hasinit[center+line_offset] = true;
-            lines_size[center+line_offset] = (int)floor((i - 1 - start_offset)/winw);
-
-            if (line_offset == 0) c_linebef_size = i - start_offset;
-
-            start_offset = i - 1;
+    for (i = buf->bc_current_char - 1; i >= 0; i--) {
+        if ((buf->before_cursor[i] == '\n') || (i == 0)) {
+            rlines->line_starts[center+line_offset] = i;
             line_offset--;
         }
+
         if (center+line_offset < 0) break;
     }
 
-    // after_cursor
-    line_offset = 0;
-    start_offset = 0;
-    wchar_t* current_line_after = NULL;
-    int c_lineaf_size = 0;
-    for (int i = 0; i <= buf->b_size - buf->ac_current_char; i++) {
-        if (buf->b_size == buf->ac_current_char) break;
-        if (buf->after_cursor[buf->ac_current_char + i] == '\n') {
-            if (line_offset != 0) { // We need to handle this case differently bcs we grabbed the first part of the current line in before
-                wchar_t* str = tbuffer_translate_string(buf, BO_AFTER, buf->ac_current_char + start_offset, buf->ac_current_char + i);
-                lines[center+line_offset] = str;
-                lines_hasinit[center+line_offset] = true;
-                lines_size[center+line_offset] = (int)floor((i - start_offset)/winw);
-            } else {
-                current_line_after = ecalloc(i - start_offset, sizeof(wchar_t));
-                memcpy(current_line_after, buf->after_cursor + buf->ac_current_char + start_offset, (i - start_offset)*sizeof(wchar_t));
-                c_lineaf_size = i - start_offset;
-            }
-            if (endscroll) break;
-
-            start_offset = i+1;
-            line_offset++;
-        } else if (i == buf->b_size - buf->ac_current_char) { // The last line needs special treatment bcs it's not delimited with \n
-            if (line_offset != 0) { // Again, we handle this later
-                wchar_t* str = tbuffer_translate_string(buf, BO_AFTER, buf->ac_current_char + start_offset, buf->ac_current_char + i + 1);
-                lines[center+line_offset] = str;
-                lines_hasinit[center+line_offset] = true;
-                lines_size[center+line_offset] = (int)floor((i + 1 - start_offset)/winw);
-            } else {
-                current_line_after = ecalloc(i - start_offset, sizeof(wchar_t));
-                memcpy(current_line_after, buf->after_cursor + buf->ac_current_char + start_offset, (i - start_offset)*sizeof(wchar_t)); //ok
-                c_lineaf_size = i - start_offset;
-            }
-            if (endscroll) break;
-
-            start_offset = i+1;
+    line_offset = 1;
+    // after_cursor and second part of the current line
+    for (i = buf->bc_current_char; i <= buf->current_chars_stored; i++) { // TODO: is <= buf->current_chars_stored problematic??????¿?¿
+        if ((tbuffer_get_char_absolute(buf, i) == '\n') || (i == buf->current_chars_stored)) {
+            rlines->line_starts[center+line_offset] = i;
             line_offset++;
         }
-        if (center+line_offset > winh-1) break;
+
+        if (center+line_offset >= winh) break;
     }
 
-    // Correctly get the current line. We have the first part in lines[center] and the second one in current_line_after.
-    wchar_t* current_line_before = lines[center];
-    if (lines[center] != NULL) {
-        lines[center] = wstrcat_in_tbuffer_render(current_line_before, current_line_after, c_linebef_size, c_lineaf_size);
-        lines_size[center] = (int)floor((c_linebef_size + c_lineaf_size)/winw);
-    } else if (buf->bc_current_char == 0) { // Extra check so that if we mess something up we can evaluate if it's useful adding another case to this
-                                            // instead of it silently working but being wrong
-        lines[center] = ecalloc(c_lineaf_size, sizeof(wchar_t));
-        memcpy(lines[center], current_line_after, sizeof(wchar_t)*c_lineaf_size);
-    }
-
-    // Render everything
-    int centerx = 0;
-    int centery = center; // We save centery just in case
     werase(win);
-    int wrap_line_offset = 0; //TODO: please make an actual solution
-    for (int i = 0; i < winh; i++) {
-        /*if (lines_hasinit[i]) {
-            wmove(win, i, 0);
-            wprintw(win, "%d", i+1);
-        }*/
-        if (lines[i] == NULL) continue;
-        if (i == center) {
-            wmove(win, i+wrap_line_offset, 0);
-            if (current_line_before != NULL) {
-                waddwstr(win, current_line_before);
-                centerx = getcurx(win);
-                centery = getcury(win);
-            }
+    wmove(win, 0, 0);
+    for (i = 0; i < rlines->line_amount; i++) {
+        int start = rlines->line_starts[i];
+        int end = rlines->line_starts[i + 1];
+
+        if ( (end < 0) || (start < 0) ) continue;
+        wmove(win, i, 0);
+
+        int c = start == 0 ? start : start + 1;
+        for (; c < end; c++) {
+            u32 char_to_add = 0; // This is treated as a PDCurses chtype/cchar_t
+            // Pointer math incoming
+            *(((u16*)&char_to_add)) = tbuffer_get_char_absolute(buf, c); //*(((u16*)&char_to_add) + 1) doesn't work. This apparently depends on endianness TODO
+            wadd_wch(win, (cchar_t*)&char_to_add);
         }
-        wmove(win, i+wrap_line_offset, 0);
-        waddwstr(win, lines[i]);
-        wrap_line_offset += lines_size[i];
     }
+
     wrefresh(win);
 
+    // Cursor position
     if ((cx != NULL) && (cy != NULL)) {
-        *cx = centerx;
-        *cy = centery;
+        *cy = center;
+        *cx = rlines->line_starts[center] == 0 ?
+            buf->bc_current_char-rlines->line_starts[center]   :
+            buf->bc_current_char-rlines->line_starts[center]-1 ; // TODO: check
     }
-    wrefresh(stdscr);
-
-    free(lines_hasinit);
-    free(lines_size);
-    free(current_line_after);
-    free(current_line_before);
-
-    if (previous_lines->lines != NULL) {
-        for (int i = 0; i < previous_lines->amount; i++) {
-            if (previous_lines->lines[i] != NULL) free(previous_lines->lines[i]);
-            previous_lines->lines[i] = NULL;
-        }
-    }
-    free(previous_lines->lines);
-
-    previous_lines->amount = winh;
-    previous_lines->lines  = lines;
 }
 
 // TODO: we can change this to just use a memcpy after we changed the type of the buffes to wchar_t*
@@ -406,6 +340,15 @@ int tbuffer_get_cursor_line(Text_buffer* buf) {
         if (bc[i] == '\n') l++;
     }
     return l;
+}
+
+wchar_t tbuffer_get_char_absolute(Text_buffer* buf, int pos) {
+    if ((pos >= buf->current_chars_stored) || (pos < 0)) return L'\0';
+    if (pos >= buf->bc_current_char) { // Return from the after_cursor buffer
+        return buf->after_cursor[pos - buf->bc_current_char + buf->ac_current_char];
+    }
+    // Return from the before_cursor buffer
+    return buf->before_cursor[pos];
 }
 
 void tbuffer_free(Text_buffer* buf) {
@@ -488,7 +431,7 @@ TBUFID tsFILE_new() {
 
 TBUFID tsFILE_open(const u8* name, u32 name_size) { // TODO: Make sure we don't load any illegal files (unsupported UNICODE, etc...) & we don't open already opened files
     // TODO: We could have the file streaming into a data buffer and turning it into UTF16 at the same time with threads if performance is important
-    FILE* f = fopen((char*)name, "r");
+    FILE* f = fopen((char*)name, "r"); // There's a fopen variant called _wfopen_s that can open files with wchar_t names
     if (f == NULL) {
         TB_system_error = TBSE_FILE_NOT_FOUND;
         return 2000000;
@@ -674,7 +617,7 @@ void bwindow_handle_keypress(Buffer_window* w, int key, u64 key_mods) {
         tbuffer_move_cursor(buf, 1);
         break;
 
-    case KEY_UP: // TODO: If lines only consist of \n some weird things happen
+    case KEY_UP: // TODO: If lines only consist of \n some weird things happen, like an infinite loop (wtf)
         if (is_comline) return;
         int linestart = tbuffer_last_nl_before(buf, buf->bc_current_char);
         if (linestart != 0) {
@@ -733,6 +676,10 @@ void bwindow_handle_keypress(Buffer_window* w, int key, u64 key_mods) {
             if (wchrissymbol(buf->after_cursor[buf->ac_current_char + 1])) break;
             tbuffer_move_cursor(buf, 1);
         }
+        break;
+
+    case CTL_ENTER:
+        buf->abs_mark_position = buf->bc_current_char;
         break;
 
     }
@@ -810,7 +757,7 @@ u32 fbw_add_entry(TBUFID newbufid, const wchar_t* path, u32 pathsz, int* winid) 
     u32 file_name_size = 0;
     wchar_t* file_name = wstrfilefrompath(path, pathsz, &file_name_size);
 
-    wstrlist_add(&App.fbw.file_names, path, pathsz);
+    wstrlist_add(&App.fbw.file_names, path, pathsz); // This is named in an stupid way
     wstrlist_add(&App.fbw.names, file_name, file_name_size);
     list_add(&App.fbw.ids, &newbufid, sizeof(TBUFID));
     if (winid == NULL) {
@@ -819,7 +766,6 @@ u32 fbw_add_entry(TBUFID newbufid, const wchar_t* path, u32 pathsz, int* winid) 
     } else list_add(&App.fbw.binds, winid, sizeof(int));
 
     // Insert the string in the correct buffers
-    // TODO: Use a version of printf to do this
     Text_buffer* buf = &TB_system.buffers[App.fbw.fb];
 
     tbuffer_move_cursor(buf, buf->current_chars_stored - buf->bc_current_char);

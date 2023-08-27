@@ -9,6 +9,14 @@
 #include "wstr.h"
 #include "databuffer.h"
 #include "strlist.h"
+#include "list.h"
+
+// Render stuff for text buffers
+/* Store the starts and ends of the lines that are getting drawn, with the color map */
+typedef struct {
+    int* line_starts;
+    int line_amount;
+} Render_lines;
 
 /* Text_buffer stores text in 2 different buffers: one that consists of text before the cursor
 and one that consists of text after the cursor. This is pretty handy for modifying lots of characters around
@@ -28,6 +36,8 @@ typedef struct { // TODO: Make this into an actual "gap buffer" (basically the o
     int bc_current_char; // We are not supporting huge files
     int ac_current_char;
     int current_chars_stored;
+    int abs_mark_position;
+    Render_lines render_lines;
     Narrow_string linked_file_path;
     u8 flags;
 } Text_buffer;
@@ -52,6 +62,7 @@ typedef enum {
     TB_COMOUTPUT = 16 // Is the text buffer the input for commands
 } Text_buffer_flags;
 
+// Text buffer system
 struct {
     Text_buffer* buffers;
     bool* free;
@@ -72,6 +83,7 @@ TB_system_error_code TB_system_error;
 
 typedef u32 TBUFID;
 
+// Buffer windows
 typedef struct {
     WINDOW* curses_window;
     Lines_buffer* curl;
@@ -86,6 +98,8 @@ typedef enum {
     BW_FILE = 2 // Is this buffer window the one for files?
 } Buffer_window_flags;
 
+
+// Functions
 /* Initializers */
 Text_buffer* tbuffer_create(int in_size);
 void         tbuffer_init(Text_buffer* buf, int in_size);
@@ -114,7 +128,11 @@ wchar_t* tbuffer_translate_string(Text_buffer* buf, Buffer_order b, int st, int 
 int tbuffer_find_line(Text_buffer* buf, int l); /* Finds the position of the start of the l'th line*/
 int tbuffer_get_cursor_line(Text_buffer* buf); /* Finds the line the cursor is currently in */
 
+wchar_t tbuffer_get_char_absolute(Text_buffer* buf, int pos); /* Finds the char at position pos in the buffer ignoring the gap between the buffers */
+
+/* Graphics stuff */
 void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx); /* Renders the lines that are visible on the given window */
+void tbuffer_start_render_lines(Text_buffer* buf); /* Starts the render lines */
 
 /*
     Buffer system functions

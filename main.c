@@ -2,13 +2,15 @@
     TODO:
     - Better API for commands?
 
-    - Support for multiple file encodings
+    - Support for multiple file encodings & line endings
 
     - Showing the name of the buffer in the window or something to make it easy to see which file you are editing (fbw kinda sucks)
         - Alternate between "all" mode & "bound" mode in fbw?
 
-    - ctrl-c to select command line and ctrl-c to go back? Ditch function keys for navigation?
+    - ctrl-t to select command line and ctrl-t to go back? Ditch function keys for navigation?
     - emacs style navigation (ctrl-f, ctrl-b, ctrl-n, ctrl-p instead of right, left, down, up) or displaced arrow keys (ctrl-l, ctrl-j, ctrl-k, ctrl-i)
+    - Selections
+    - Line wrapping
     - Copy & paste.
     - Commands for navigation (goto, start, end, idk)
     - Shortcuts for commands
