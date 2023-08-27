@@ -204,7 +204,7 @@ void tbuffer_clear(Text_buffer* buf) {
    make it easier to color them. */
 void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx) {
 
-    // TODO: Last line in the buffer doesn't get rendered
+    // TODO: Ensure we are using memory correctly
     WINDOW* win = bwin->curses_window;
     int winh = getmaxy(win);
     int winw = getmaxx(win);
@@ -220,11 +220,11 @@ void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, Lines_buffer* previou
     Render_lines* rlines = &buf->render_lines;
     if (rlines->line_amount != winh) {
         if (rlines->line_starts != NULL) free(rlines->line_starts);
-        rlines->line_starts = ecalloc(winh, sizeof(int));
+        rlines->line_starts = ecalloc(winh+1, sizeof(int));
         rlines->line_amount = winh;
     }
     int i = 0;
-    for (; i < rlines->line_amount; i++) {
+    for (; i <= rlines->line_amount; i++) {
         rlines->line_starts[i] = -1;
     }
 
@@ -246,7 +246,8 @@ void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, Lines_buffer* previou
             line_offset++;
         }
 
-        if (center+line_offset >= winh) break;
+        if (tbuffer_get_char_absolute(buf, i) == '\0') break;
+        if (center+line_offset > winh) break;
     }
 
     werase(win);
@@ -617,7 +618,7 @@ void bwindow_handle_keypress(Buffer_window* w, int key, u64 key_mods) {
         tbuffer_move_cursor(buf, 1);
         break;
 
-    case KEY_UP: // TODO: If lines only consist of \n some weird things happen, like an infinite loop (wtf)
+    case KEY_UP: // TODO: If lines only consist of \n some weird things happen, like an infinite loop (wtf). Maybe use the Render_lines
         if (is_comline) return;
         int linestart = tbuffer_last_nl_before(buf, buf->bc_current_char);
         if (linestart != 0) {
