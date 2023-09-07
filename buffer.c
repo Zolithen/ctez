@@ -15,10 +15,12 @@
 
 #include "command.h"
 
+// TBuffers are inited in tbuffer_init, tbuffer_from_databuffer & tsFILE_open
 void tbuffer_init(Text_buffer* buf, int in_size) {
     buf->b_size = in_size;
-    buf->before_cursor = ecalloc(in_size, sizeof(wchar_t));
-    buf->after_cursor = ecalloc(in_size, sizeof(wchar_t));
+    buf->memory_block = ecalloc(in_size * 2, sizeof(wchar_t));
+    buf->before_cursor = buf->memory_block;
+    buf->after_cursor = buf->memory_block + in_size;
     buf->ac_current_char = in_size;
     buf->bc_current_char = 0;
     buf->current_chars_stored = 0;
@@ -41,8 +43,9 @@ Text_buffer* tbuffer_from_databuffer(Data_buffer* dat) {
     if (dat->cursize % 2 == 1) return NULL; // wchar_t is 2 bytes, so if we have an odd numbers of bytes in dat we can't get wchar_t right
     Text_buffer* res = emalloc(sizeof(Text_buffer)); // TODO: Use the tbuffer_init method
     res->b_size = dat->cursize/2;
-    res->before_cursor = ecalloc(res->b_size, sizeof(wchar_t));
-    res->after_cursor = ecalloc(res->b_size, sizeof(wchar_t));
+    res->memory_block = ecalloc(res->b_size  * 2, sizeof(wchar_t));
+    res->before_cursor = res->memory_block;
+    res->after_cursor = res->memory_block + res->b_size ;
     res->ac_current_char = res->b_size;
     res->bc_current_char = res->b_size - 1;
     res->current_chars_stored = res->b_size - 1;
@@ -124,17 +127,21 @@ void tbuffer_resize(Text_buffer* buf) {
     int old_size = buf->b_size;
     buf->b_size *= 2;
 
+    // Create the new memory block
+    wchar_t* new_block = ecalloc(buf->b_size * 2, sizeof(wchar_t));
+
     // Copy before
-    wchar_t* new_before = ecalloc(buf->b_size, sizeof(wchar_t));
+    wchar_t* new_before = new_block;
     memcpy(new_before, buf->before_cursor, sizeof(wchar_t)*buf->bc_current_char);
-    free(buf->before_cursor);
     buf->before_cursor = new_before;
 
     // Copy after. We need the contents of the buffer to still start from the end.
-    wchar_t* new_after = ecalloc(buf->b_size, sizeof(wchar_t));
+    wchar_t* new_after = new_block + buf->b_size;
     memcpy(new_after + old_size, buf->after_cursor, sizeof(wchar_t)*old_size); // We add old_size bcs buf->b_size - old_size = old_size
-    free(buf->after_cursor);
     buf->after_cursor = new_after;
+
+    free(buf->memory_block);
+    buf->memory_block = new_block;
 
     buf->ac_current_char += buf->b_size - old_size;
 }
@@ -143,18 +150,21 @@ void tbuffer_resize_custom(Text_buffer* buf, int sz) {
     int old_size = buf->b_size;
     buf->b_size += sz + 1;
 
+    // Create the new memory block
+    wchar_t* new_block = ecalloc(buf->b_size * 2, sizeof(wchar_t));
+
     // Copy before
-    wchar_t* new_before = ecalloc(buf->b_size, sizeof(wchar_t));
+    wchar_t* new_before = new_block;
     memcpy(new_before, buf->before_cursor, sizeof(wchar_t)*buf->bc_current_char);
-    free(buf->before_cursor);
     buf->before_cursor = new_before;
 
     // Copy after. We need the contents of the buffer to still start from the end.
-    wchar_t* new_after = ecalloc(buf->b_size, sizeof(wchar_t));
-    memcpy(new_after + (buf->b_size - old_size), buf->after_cursor, sizeof(wchar_t)*old_size); /* Please make sure you actually know the algorithms before
-    implementing them */
-    free(buf->after_cursor);
+    wchar_t* new_after = new_block + buf->b_size;
+    memcpy(new_after + old_size, buf->after_cursor, sizeof(wchar_t)*old_size); // We add old_size bcs buf->b_size - old_size = old_size
     buf->after_cursor = new_after;
+
+    free(buf->memory_block);
+    buf->memory_block = new_block;
 
     buf->ac_current_char += buf->b_size - old_size;
 }
@@ -364,8 +374,7 @@ wchar_t tbuffer_get_char_absolute(Text_buffer* buf, int pos) {
 }
 
 void tbuffer_free(Text_buffer* buf) {
-    free(buf->after_cursor);
-    free(buf->before_cursor);
+    free(buf->memory_block);
     free(buf);
 }
 
@@ -389,8 +398,7 @@ void ts_shutdown() {
     // TODO: maybe saved closed files?????????????
     for (u32 i = 0; i < TB_system.current_alloc; i++) {
         if (!TB_system.free[i]) {
-            free(TB_system.buffers[i].after_cursor);
-            free(TB_system.buffers[i].before_cursor);
+            free(TB_system.buffers[i].memory_block);
         }
     }
     free(TB_system.buffers);
@@ -422,8 +430,7 @@ void ts_free_buffer(TBUFID id) {
         if (!TB_system.free[id]) {
             TB_system.free[id] = true;
             Text_buffer b = TB_system.buffers[id];
-            free(b.after_cursor);
-            free(b.before_cursor);
+            free(b.memory_block);
         } else {
             TB_system_error = TBSE_ALREADY_FREE;
         }
@@ -470,8 +477,9 @@ TBUFID tsFILE_open(const u8* name, u32 name_size) { // TODO: Make sure we don't 
     TBUFID id = ts_ensure_free();
     Text_buffer* buf = &(TB_system.buffers[id]);
     buf->b_size = utf16->cursize/2;
-    buf->before_cursor = ecalloc(buf->b_size, sizeof(wchar_t));
-    buf->after_cursor = ecalloc(buf->b_size, sizeof(wchar_t));
+    buf->memory_block = ecalloc(buf->b_size * 2, sizeof(wchar_t));
+    buf->before_cursor = buf->memory_block;
+    buf->after_cursor = buf->memory_block + buf->b_size;
     buf->ac_current_char = buf->b_size;
     buf->bc_current_char = buf->b_size - 1;
     buf->current_chars_stored = buf->b_size - 1;

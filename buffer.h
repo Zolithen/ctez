@@ -43,6 +43,7 @@ after_cursor  = ····efg
 typedef struct { // TODO: Make this into an actual "gap buffer" (basically the optimized version of this)
     wchar_t* before_cursor;
     wchar_t* after_cursor;
+    wchar_t* memory_block;
     int b_size;
     int bc_current_char; // We are not supporting huge files
     int ac_current_char;
