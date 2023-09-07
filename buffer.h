@@ -18,6 +18,17 @@ typedef struct {
     int line_amount;
 } Render_lines;
 
+/* Actions that guarantee a rerender of part of the buffer */
+typedef enum {
+    TB_ACT_NONE,
+    TB_ACT_WRITE_CHAR,
+    TB_ACT_NEWLINE,
+    TB_ACT_SCROLL_UP,
+    TB_ACT_SCROLL_DOWN,
+    TB_ACT_RERENDER,
+    TB_ACT_MAX
+} User_action;
+
 /* Text_buffer stores text in 2 different buffers: one that consists of text before the cursor
 and one that consists of text after the cursor. This is pretty handy for modifying lots of characters around
 a position (for example, the cursor) Fields that talk about chars are about the unicode
@@ -37,7 +48,10 @@ typedef struct { // TODO: Make this into an actual "gap buffer" (basically the o
     int ac_current_char;
     int current_chars_stored;
     int abs_mark_position;
+
     Render_lines render_lines;
+    User_action last_user_action; // Saves what was the last thing the user did to the text buffer
+
     Narrow_string linked_file_path;
     u8 flags;
 } Text_buffer;
@@ -86,8 +100,6 @@ typedef u32 TBUFID;
 // Buffer windows
 typedef struct {
     WINDOW* curses_window;
-    Lines_buffer* curl;
-    Lines_buffer* prevl;
     TBUFID buf_id;
     int win_id;
     u8 flags; // 1's bit visible
@@ -131,7 +143,7 @@ int tbuffer_get_cursor_line(Text_buffer* buf); /* Finds the line the cursor is c
 wchar_t tbuffer_get_char_absolute(Text_buffer* buf, int pos); /* Finds the char at position pos in the buffer ignoring the gap between the buffers */
 
 /* Graphics stuff */
-void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx); /* Renders the lines that are visible on the given window */
+void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, int* cy, int* cx); /* Renders the lines that are visible on the given window */
 void tbuffer_start_render_lines(Text_buffer* buf); /* Starts the render lines */
 
 /*

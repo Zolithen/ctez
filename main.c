@@ -281,7 +281,7 @@ int main() {
 
         if (keypress == 27) { // We will eventually change this to a command
             App.is_running = false;
-        } else if ( keypress == KEY_RESIZE ) { // TODO: there's stil a memory leak? (if there is, it's minor)
+        } else if ( keypress == KEY_RESIZE ) { // TODO: there's stil a memory leak
             // TODO: Make it so if we resize the window to be less height than BOTTOM_SECTION_HEIGHT we are put into a safe mode so it doesn't crash
             resize_term(0, 0);
             getmaxyx(stdscr, winh, winw);

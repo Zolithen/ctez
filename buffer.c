@@ -202,7 +202,7 @@ void tbuffer_clear(Text_buffer* buf) {
 
 /* We store the positions of near newlines in a Render_lines object to render them char by char later to
    make it easier to color them. */
-void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, Lines_buffer* previous_lines, int* cy, int* cx) {
+void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, int* cy, int* cx) {
 
     // TODO: Ensure we are using memory correctly
     WINDOW* win = bwin->curses_window;
@@ -256,15 +256,22 @@ void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, Lines_buffer* previou
         int start = rlines->line_starts[i];
         int end = rlines->line_starts[i + 1];
 
-        if ( (end < 0) || (start < 0) ) continue;
+        if ( (end < 0) || (start < 0) || (end < start)) continue;
         wmove(win, i, 0);
 
-        int c = start == 0 ? start : start + 1;
+        /*int c = start == 0 ? start : start + 1;
         for (; c < end; c++) {
             u32 char_to_add = 0; // This is treated as a PDCurses chtype/cchar_t
             // Pointer math incoming
             *(((u16*)&char_to_add)) = tbuffer_get_char_absolute(buf, c); //*(((u16*)&char_to_add) + 1) doesn't work. This apparently depends on endianness TODO
             wadd_wch(win, (cchar_t*)&char_to_add);
+        }*/
+        if (i < center) {
+            waddnwstr(win, buf->before_cursor + start + (start == 0 ? 0 : 1), end - start); // Apparently this function is like really expensive
+            // Today I learned the windows console is really badly optimized
+        }
+        if (i > center) {
+            waddnwstr(win, buf->after_cursor + buf->ac_current_char + start + (start == 0 ? 0 : 1), end - start);
         }
     }
 
@@ -559,7 +566,6 @@ databuffer_free(dat);
 Buffer_window* bwindow_create() {
     Buffer_window* b = ecalloc(1, sizeof(Buffer_window));
     b->buf_id = tsFILE_new();
-    b->prevl = ecalloc(1, sizeof(Lines_buffer));
     b->flags = 0;
     b->win_id = -1;
     return b;
@@ -717,7 +723,7 @@ void bwindow_update(Buffer_window* w, int winh, int* cursorx, int* cursory, bool
                                                     //       of the main loop
         /* We return the current array of lines from the function to free them after we have already set the new lines.
            This is because addwstr apparently needs the pointer alive and doesn't copy the contents of the string? Idk */
-        tbuffer_render(w, curbuffer, w->prevl, cursory, cursorx);
+        tbuffer_render(w, curbuffer, cursory, cursorx);
 
         if (is_selected_window) {
             // Render the line number
