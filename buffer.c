@@ -204,7 +204,7 @@ void tbuffer_clear(Text_buffer* buf) {
    make it easier to color them. */
 void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, int* cy, int* cx) {
 
-    // TODO: Ensure we are using memory correctly
+    // TODO: Ensure we are using memory correctly & cursor on first char doesn't show first line
     WINDOW* win = bwin->curses_window;
     int winh = getmaxy(win);
     int winw = getmaxx(win);
@@ -230,9 +230,13 @@ void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, int* cy, int* cx) {
 
     // before_cursor and first part of the current line
     for (i = buf->bc_current_char - 1; i >= 0; i--) {
-        if ((buf->before_cursor[i] == '\n') || (i == 0)) {
+        if ((buf->before_cursor[i] == L'\n') || (i == 0)) {
             rlines->line_starts[center+line_offset] = i;
             line_offset--;
+        }
+
+        if (i == buf->current_chars_stored - 1) {
+            rlines->line_starts[center+1] = i + 1;
         }
 
         if (center+line_offset < 0) break;
@@ -240,13 +244,13 @@ void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, int* cy, int* cx) {
 
     line_offset = 1;
     // after_cursor and second part of the current line
-    for (i = buf->bc_current_char; i <= buf->current_chars_stored; i++) { // TODO: is <= buf->current_chars_stored problematic??????¿?¿
-        if ((tbuffer_get_char_absolute(buf, i) == '\n') || (i == buf->current_chars_stored)) {
+    for (i = buf->bc_current_char; i < buf->current_chars_stored; i++) { // TODO: is <= buf->current_chars_stored problematic??????¿?¿
+        if ((tbuffer_get_char_absolute(buf, i) == L'\n') || (i == buf->current_chars_stored - 1)) {
             rlines->line_starts[center+line_offset] = i;
             line_offset++;
         }
 
-        if (tbuffer_get_char_absolute(buf, i) == '\0') break;
+        if (tbuffer_get_char_absolute(buf, i) == L'\0') break;
         if (center+line_offset > winh) break;
     }
 
@@ -255,24 +259,24 @@ void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, int* cy, int* cx) {
     for (i = 0; i < rlines->line_amount; i++) {
         int start = rlines->line_starts[i];
         int end = rlines->line_starts[i + 1];
-
         if ( (end < 0) || (start < 0) || (end < start)) continue;
         wmove(win, i, 0);
 
-        /*int c = start == 0 ? start : start + 1;
+        int c = start == 0 ? start : start + 1;
         for (; c < end; c++) {
             u32 char_to_add = 0; // This is treated as a PDCurses chtype/cchar_t
             // Pointer math incoming
             *(((u16*)&char_to_add)) = tbuffer_get_char_absolute(buf, c); //*(((u16*)&char_to_add) + 1) doesn't work. This apparently depends on endianness TODO
             wadd_wch(win, (cchar_t*)&char_to_add);
-        }*/
-        if (i < center) {
+        }
+        /*if (i < center) {
             waddnwstr(win, buf->before_cursor + start + (start == 0 ? 0 : 1), end - start); // Apparently this function is like really expensive
             // Today I learned the windows console is really badly optimized
         }
         if (i > center) {
             waddnwstr(win, buf->after_cursor + buf->ac_current_char + start + (start == 0 ? 0 : 1), end - start);
-        }
+        }*/
+
     }
 
     wrefresh(win);
@@ -280,9 +284,9 @@ void tbuffer_render(Buffer_window* bwin, Text_buffer* buf, int* cy, int* cx) {
     // Cursor position
     if ((cx != NULL) && (cy != NULL)) {
         *cy = center;
-        *cx = rlines->line_starts[center] == 0 ?
-            buf->bc_current_char-rlines->line_starts[center]   :
-            buf->bc_current_char-rlines->line_starts[center]-1 ; // TODO: check
+        *cx = rlines->line_starts[center] == -1 ? 0 :
+                rlines->line_starts[center] == 0 ? buf->bc_current_char - rlines->line_starts[center] :
+                    buf->bc_current_char - rlines->line_starts[center] - 1;
     }
 }
 
